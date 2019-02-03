@@ -90,8 +90,9 @@
 
 #| Formal specs for `subst':
    (`N' is a <num>, `E1', `E2' are <ALGAE>s, `x' is some <id>, `y' is a
-   *different* <id>)
+   *different* <id>, `B' is a True/False)
       N[v/x]                = N
+      B[v/x]                = B
       {+ E ...}[v/x]        = {+ E[v/x] ...}
       {* E ...}[v/x]        = {* E[v/x] ...}
       {- E1 E ...}[v/x]     = {- E1[v/x] E[v/x] ...}
@@ -99,7 +100,7 @@
       {< E1 E2}[v/x]        = {< E1[v/x] E2[v/x]}
       {= E1 E2}[v/x]        = {= E1[v/x] E2[v/x]}
       {<= E1 E2}[v/x]       = {<= E1[v/x] E2[v/x]}
-      {If E1 E2 E3][v/x]    = {If E1[v/x] E2[v/x] E3[v/x]}
+      {If B E1 E2][v/x]     = {If B[v/x] E1[v/x] E2[v/x]}
       y[v/x]                = y
       x[v/x]                = v
       {with {y E1} E2}[v/x] = {with {y E1[v/x]} E2[v/x]}
