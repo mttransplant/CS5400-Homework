@@ -134,28 +134,28 @@
      (With bound-id
            (subst* named-expr)
            (if (eq? bound-id from)
-             bound-body
-             (subst* bound-body)))]))
+               bound-body
+               (subst* bound-body)))]))
 
 #| Formal specs for `eval':
-     eval(N)            = N
-     eval(B)            = B
-     eval({+ E ...})    = evalN(E) + ...
-     eval({* E ...})    = evalN(E) * ...
-     eval({- E})        = -evalN(E)
-     eval({/ E})        = 1/evalN(E)
-     eval({- E1 E ...}) = evalN(E1) - (evalN(E) + ...)
-     eval({/ E1 E ...}) = evalN(E1) / (evalN(E) * ...)
-     eval({< E1 E2}) = evalN(E1) < evalN(E2)
-     eval({= E1 E2}) = evalN(E1) = evalN(E2)
-     eval({<= E1 E2}) = evalN(E1) <= evalN(E2)
-     eval({If E1 E2 E3}) = if eval(E1) eval(E2) eval(E3)
-     eval({Not E}) = eval({if E False True})
-     eval({And E1 E2}) = eval({if E1 E2 False})
-     eval({Or E1 E2}) = eval({if E1 True E2})
-     eval(id)           = error!
+     eval(N)                = N
+     eval(B)                = B
+     eval({+ E ...})        = evalN(E) + ...
+     eval({* E ...})        = evalN(E) * ...
+     eval({- E})            = -evalN(E)
+     eval({/ E})            = 1/evalN(E)
+     eval({- E1 E ...})     = evalN(E1) - (evalN(E) + ...)
+     eval({/ E1 E ...})     = evalN(E1) / (evalN(E) * ...)
+     eval({< E1 E2})        = evalN(E1) < evalN(E2)
+     eval({= E1 E2})        = evalN(E1) = evalN(E2)
+     eval({<= E1 E2})       = evalN(E1) <= evalN(E2)
+     eval({If B E1 E2})     = if eval(B) eval(E1) eval(E2)
+     eval({Not E})          = eval({if E False True})
+     eval({And E1 E2})      = eval({if E1 E2 False})
+     eval({Or E1 E2})       = eval({if E1 True E2})
+     eval(id)               = error!
      eval({with {x E1} E2}) = eval(E2[eval(E1)/x])
-     evalN(E) = eval(E) if it is a number, error otherwise
+     evalN(E)               = eval(E) if it is a number, error otherwise
 |#
 
 (: eval-number : ALGAE -> Number)
@@ -163,18 +163,19 @@
 (define (eval-number expr)
   (let ([result (eval expr)])
     (if (number? result)
-      result
-      (error 'eval-number "need a number when evaluating ~s, but got ~s"
-             expr result))))
+        result
+        (error 'eval-number "need a number when evaluating ~s, but got ~s"
+               expr result))))
 
 (: eval-boolean : ALGAE -> Boolean)
 ;; helper for `eval': verifies that the result is a boolean
 (define (eval-boolean expr)
   (let ([result (eval expr)])
     (if (boolean? result)
-      result
-      (error 'eval-boolean "need a boolean when evaluating ~s, but got ~s"
-             expr result))))
+        result
+        (error 'eval-boolean "need a boolean when evaluating ~s, but got ~s"
+               expr
+               result))))
 
 (: value->algae : (U Number Boolean) -> ALGAE)
 ;; converts a value to an ALGAE value (so it can be used with `subst')
@@ -200,12 +201,15 @@
     [(Bool b) b]
     [(Add args) (foldl + 0 (map eval-number args))]
     [(Mul args) (foldl * 1 (map eval-number args))]
-    [(Sub fst args) (- (eval-number fst)
-                       (foldl + 0 (map eval-number args)))]
+    [(Sub fst args) (if (null? args)
+                        (- (eval-number fst))
+                        (- (eval-number fst)
+                           (foldl + 0 (map eval-number args))))]
     [(Div fst args)    (let ([x (foldl * 1 (map eval-number args))])
-                         (if (zero? x)
-                            (error 'eval "division by zero")
-                            (/ (eval-number fst) x)))]
+                         (cond [(null? args) (/ 1 (eval-number fst))]
+                               [(zero? x)
+                                (error 'eval "division by zero")]
+                               [else (/ (eval-number fst) x)]))]
     [(Less fst scd) (< (eval-number fst) (eval-number scd))]
     [(Equal fst scd) (= (eval-number fst) (eval-number scd))]
     [(LessEq fst scd) (<= (eval-number fst) (eval-number scd))]
@@ -244,6 +248,8 @@
 (test (run "{with {x 10} {- x 5 3}}") => 2)
 (test (run "{with {x 3} {* x 5 3}}") => 45)
 (test (run "{with {x 25} {/ x 5 5}}") => 1)
+(test (run "{- 5}") => -5)
+(test (run "{/ 2}") => 1/2)
 (test (run "{/ 7 0}") =error> "division by zero")
 ;; adding boolean and conditions
 (test (run "{with {x 5} {< x 10}}") => #t)
