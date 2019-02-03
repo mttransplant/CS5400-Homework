@@ -271,3 +271,5 @@
 (test (run "{or False False}") => #f)
 (test (run "{and True 123}") => 123)
 (test (run "{and 124 456}") =error> "need a boolean when evaluating")
+
+(define minutes-spent 280)
