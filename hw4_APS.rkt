@@ -1,11 +1,11 @@
 #lang pl 04
 
+(define minutes-spent 230)
+
 #|
 Completed:
 Part 0: Complete Coverage
 Part 1: Fixing Arithmetics
-
-Yet to begin:
 Part 2: Adding Booleans and Conditionals
 Part 3: Further Extensions
 |#
@@ -18,6 +18,16 @@ Part 3: Further Extensions
                | { / <ALGAE> <ALGAE> ... }
                | { with { <id> <ALGAE> } <ALGAE> }
                | <id>
+               | { < <ALGAE> <ALGAE> }
+               | { = <ALGAE> <ALGAE> }
+               | { <= <ALGAE> <ALGAE> }
+               | Bool
+               | True
+               | False
+               | { If <ALGAE> <ALGAE> <ALGAE> }
+               | { not Bool }
+               | { and Bool Bool }
+               | { or Bool Bool }
 |#
 
 ;; ALGAE abstract syntax trees
@@ -28,7 +38,30 @@ Part 3: Further Extensions
   [Sub  ALGAE (Listof ALGAE)]
   [Div  ALGAE (Listof ALGAE)]
   [Id   Symbol]
-  [With Symbol ALGAE ALGAE])
+  [With Symbol ALGAE ALGAE]
+  [Less ALGAE ALGAE]
+  [Equal ALGAE ALGAE]
+  [LessEq ALGAE ALGAE]
+  [Bool Boolean]
+  [If ALGAE ALGAE ALGAE])
+
+(: Not : ALGAE -> ALGAE)
+;; fake binding for Not
+;; returns the opposite boolean of what's given
+(define (Not expr)
+  (If expr (Bool #f) (Bool #t)))
+
+(: And : ALGAE ALGAE -> ALGAE)
+;; fake binding for And
+;; returns True if both exprs are True, else returns False
+(define (And e1 e2)
+  (If e1 e2 (Bool #f)))
+
+(: Or : ALGAE ALGAE -> ALGAE)
+;; fake bindign for Or
+;; returns True if either expr is True, else returns False
+(define (Or e1 e2)
+  (If e1 (Bool #t) e2))
 
 (: parse-sexpr : Sexpr -> ALGAE)
 ;; parses s-expressions into ALGAEs
@@ -38,7 +71,9 @@ Part 3: Further Extensions
   (define (parse-sexprs sexprs) (map parse-sexpr sexprs))
   (match sexpr
     [(number: n)    (Num n)]
-    [(symbol: name) (Id name)]
+    [(symbol: name) (cond [(eq? name 'True) (Bool true)]
+                          [(eq? name 'False) (Bool false)]
+                          [else (Id name)])]
     [(cons 'with more)
      (match sexpr
        [(list 'with (list (symbol: name) named) body)
@@ -48,6 +83,15 @@ Part 3: Further Extensions
     [(list '* args ...)     (Mul (parse-sexprs args))]
     [(list '- fst args ...) (Sub (parse-sexpr fst) (parse-sexprs args))]
     [(list '/ fst args ...) (Div (parse-sexpr fst) (parse-sexprs args))]
+    [(list '< fst scnd) (Less (parse-sexpr fst) (parse-sexpr scnd))]
+    [(list '= fst scnd) (Equal (parse-sexpr fst) (parse-sexpr scnd))]
+    [(list '<= fst scnd) (LessEq (parse-sexpr fst) (parse-sexpr scnd))]
+    [(list 'If cnd fst scnd) (If (parse-sexpr cnd)
+                                 (parse-sexpr fst)
+                                 (parse-sexpr scnd))]
+    [(list 'not arg) (Not (parse-sexpr arg))]
+    [(list 'and fst scnd) (And (parse-sexpr fst) (parse-sexpr scnd))]
+    [(list 'or fst scnd) (Or (parse-sexpr fst) (parse-sexpr scnd))]
     [else (error 'parse-sexpr "bad syntax in ~s" sexpr)]))
 
 (: parse : String -> ALGAE)
@@ -57,7 +101,7 @@ Part 3: Further Extensions
 
 #| Formal specs for `subst':
    (`N' is a <num>, `E1', `E2' are <ALGAE>s, `x' is some <id>, `y' is a
-   *different* <id>)
+   *different* <id>, `B' is a True/False)
       N[v/x]                = N
       {+ E ...}[v/x]        = {+ E[v/x] ...}
       {* E ...}[v/x]        = {* E[v/x] ...}
@@ -67,6 +111,11 @@ Part 3: Further Extensions
       x[v/x]                = v
       {with {y E1} E2}[v/x] = {with {y E1[v/x]} E2[v/x]}
       {with {x E1} E2}[v/x] = {with {x E1[v/x]} E2}
+      {< E1 E2}[v/x]        = {< E1[v/x] E2[v/x]}
+      {= E1 E2}[v/x]        = {= E1[v/x] E2[v/x]}
+      {<= E1 E2}[v/x]       = {<= E1[v/x] E2[v/x]}
+      B[v/x]                = B
+      {If B E1 E2}[v/x]     = {If B[v/x] E1[v/x] E2[v/x]}
 |#
 
 (: subst : ALGAE Symbol ALGAE -> ALGAE)
@@ -92,7 +141,12 @@ Part 3: Further Extensions
            (subst* named-expr)
            (if (eq? bound-id from)
                bound-body
-               (subst* bound-body)))]))
+               (subst* bound-body)))]
+    [(Less fst scnd) (Less (subst* fst) (subst* scnd))]
+    [(Equal fst scnd) (Equal (subst* fst) (subst* scnd))]
+    [(LessEq fst scnd) (LessEq (subst* fst) (subst* scnd))]
+    [(Bool b) expr]
+    [(If cnd fst scnd) (If (subst* cnd) (subst* fst) (subst* scnd))]))
 
 #| Formal specs for `eval':
      eval(N)            = N
@@ -105,6 +159,12 @@ Part 3: Further Extensions
      eval(id)           = error!
      eval({with {x E1} E2}) = eval(E2[eval(E1)/x])
      evalN(E) = eval(E) if it is a number, error otherwise
+     eval({< E1 E2})    = evalN(E1) < evalN(E2)
+     eval({= E1 E2})    = evalN(E1) = evalN(E2)
+     eval({<= E1 E2})   = evalN(E1) <= evalN(E2)
+     eval(B)            = B
+     eval({If B E1 E2}) = if evalB(B) then evalN(E1) else evalN(E2)
+     eval({not E})      = eval({if E False True})
 |#
 
 (: eval-number : ALGAE -> Number)
@@ -114,12 +174,24 @@ Part 3: Further Extensions
     (if (number? result)
         result
         (error 'eval-number "need a number when evaluating ~s, but got ~s"
-               expr result))))
+               expr
+               result))))
 
-(: value->algae : (U Number) -> ALGAE)
+(: eval-boolean : ALGAE -> Boolean)
+;; helper for `eval': verifies that the result is a boolean
+(define (eval-boolean expr)
+  (let ([result (eval expr)])
+    (if (boolean? result)
+        result
+        (error 'eval-boolean "need a boolean when evaluating ~s, but got ~s"
+               expr
+               result))))
+
+(: value->algae : (U Number Boolean) -> ALGAE)
 ;; converts a value to an ALGAE value (so it can be used with `subst')
 (define (value->algae val)
   (cond [(number? val) (Num val)]
+        [(boolean? val) (Bool val)]
         ;; Note: a `cond' doesn't make much sense now, but it will when
         ;; we extend the language with booleans.  Also, since we use
         ;; Typed Racket, the type checker makes sure that this function
@@ -131,7 +203,7 @@ Part 3: Further Extensions
         ;; left in for clarity.)
         ))
 
-(: eval : ALGAE -> (U Number))
+(: eval : ALGAE -> (U Number Boolean))
 ;; evaluates ALGAE expressions by reducing them to numbers
 (define (eval expr)
   (cases expr
@@ -144,21 +216,26 @@ Part 3: Further Extensions
                         (- 0 (eval-number fst))
                         (- (eval-number fst)
                            (foldl + 0 (map eval-number args))))]
-    [(Div fst args) (if (null? args)
-                        (/ 1 (eval-number fst))
-                        (/ (eval-number fst)
-                           (let ([den (foldl * 1 (map eval-number args))])
-                             (if (zero? den)
-                                 (error 'eval "attempted to divide by zero")
-                                 den))))]
+    [(Div fst args) (let ([denom (foldl * 1 (map eval-number args))])
+                      (cond [(null? args) (/ 1 (eval-number fst))]
+                            [(zero? denom)
+                             (error 'eval "attempted to divide by zero")]
+                            [else (/ (eval-number fst) denom)]))]
     [(With bound-id named-expr bound-body)
      (eval (subst bound-body
                   bound-id
                   ;; see the above `value->algae' helper
                   (value->algae (eval named-expr))))]
-    [(Id name) (error 'eval "free identifier: ~s" name)]))
+    [(Id name) (error 'eval "free identifier: ~s" name)]
+    [(Less fst scnd) (< (eval-number fst) (eval-number scnd))]
+    [(Equal fst scnd) (eq? (eval-number fst) (eval-number scnd))]
+    [(LessEq fst scnd) (<= (eval-number fst) (eval-number scnd))]
+    [(Bool b) b]
+    [(If cnd fst scnd) (if (eval-boolean cnd)
+                           (eval fst)
+                           (eval scnd))]))
 
-(: run : String -> (U Number))
+(: run : String -> (U Number Boolean))
 ;; evaluate an ALGAE program contained in a string
 (define (run str)
   (eval (parse str)))
@@ -190,3 +267,31 @@ Part 3: Further Extensions
 (test (run "{/ 2}") => 1/2)
 (test (run "{/ 1 0}") =error> "attempted to divide by zero")
 ;; adding booleans and conditionals
+(test (run "{with {x False} {If x 5 4}}") => 4)
+(test (run "{with {x True} {If x 5 4}}") => 5)
+(test (run "{If 5 4 3}") =error>
+      "eval-boolean: need a boolean when evaluating (Num 5), but got 5")
+#;(test (run "{If True True 3}") =error>
+        "eval-number: need a number when evaluating (Bool #t), but got #t")
+(test (run "{+ True 3}") =error>
+      "eval-number: need a number when evaluating (Bool #t), but got #t")
+(test (run "{If True True 3}") => #t)
+(test (run "{with {x 0} {If True x 3}}") => 0)
+(test (run "{with {x 9} {with {y {- x 5}}{< x y}}}") => #f)
+(test (run "{with {x 0} {with {y {= 0 0}} {If y {If {<= 1 x} 0 1} -1}}}") => 1)
+;; adding not, and, or
+(test (run "{not True}") => #f)
+(test (run "{not False}") => #t)
+(test (run "{and True True}") => #t)
+(test (run "{and True False}") => #f)
+(test (run "{and False True}") => #f)
+(test (run "{and False False}") => #f)
+(test (run "{or {not True} {not False}}") => #t)
+(test (run "{or True True}") => #t)
+(test (run "{or False False}") => #f)
+(test (run "{and True 123}") => 123)
+(test (run "{or False 123}") => 123)
+(test (run "{and 123 True}") =error>
+      "eval-boolean: need a boolean when evaluating (Num 123), but got 123")
+(test (run "{or 123 True}") =error>
+      "eval-boolean: need a boolean when evaluating (Num 123), but got 123")
