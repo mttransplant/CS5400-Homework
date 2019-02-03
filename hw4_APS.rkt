@@ -149,22 +149,24 @@ Part 3: Further Extensions
     [(If cnd fst scnd) (If (subst* cnd) (subst* fst) (subst* scnd))]))
 
 #| Formal specs for `eval':
-     eval(N)            = N
-     eval({+ E ...})    = evalN(E) + ...
-     eval({* E ...})    = evalN(E) * ...
-     eval({- E})        = -evalN(E)
-     eval({/ E})        = 1/evalN(E)
-     eval({- E1 E ...}) = evalN(E1) - (evalN(E) + ...)
-     eval({/ E1 E ...}) = evalN(E1) / (evalN(E) * ...)
-     eval(id)           = error!
+     eval(N)                = N
+     eval({+ E ...})        = evalN(E) + ...
+     eval({* E ...})        = evalN(E) * ...
+     eval({- E})            = -evalN(E)
+     eval({/ E})            = 1/evalN(E)
+     eval({- E1 E ...})     = evalN(E1) - (evalN(E) + ...)
+     eval({/ E1 E ...})     = evalN(E1) / (evalN(E) * ...)
+     eval(id)               = error!
      eval({with {x E1} E2}) = eval(E2[eval(E1)/x])
-     evalN(E) = eval(E) if it is a number, error otherwise
-     eval({< E1 E2})    = evalN(E1) < evalN(E2)
-     eval({= E1 E2})    = evalN(E1) = evalN(E2)
-     eval({<= E1 E2})   = evalN(E1) <= evalN(E2)
-     eval(B)            = B
-     eval({If B E1 E2}) = if evalB(B) then evalN(E1) else evalN(E2)
-     eval({not E})      = eval({if E False True})
+     evalN(E)               = eval(E) if it is a number, error otherwise
+     eval({< E1 E2})        = evalN(E1) < evalN(E2)
+     eval({= E1 E2})        = evalN(E1) = evalN(E2)
+     eval({<= E1 E2})       = evalN(E1) <= evalN(E2)
+     eval(B)                = B
+     eval({If B E1 E2})     = if evalB(B) then evalN(E1) else evalN(E2)
+     eval({not E})          = eval({if E False True})
+     eval({And E1 E2})      = eval({if E1 E2 False})
+     eval({Or E1 E2})       = eval({if E1 True E2})
 |#
 
 (: eval-number : ALGAE -> Number)
@@ -208,12 +210,10 @@ Part 3: Further Extensions
 (define (eval expr)
   (cases expr
     [(Num n) n]
-    [(Add args) (+ (eval-number (first args))
-                   (foldl + 0 (map eval-number (rest args))))]
-    [(Mul args) (* (eval-number (first args))
-                   (foldl * 1 (map eval-number (rest args))))]
+    [(Add args) (foldl + 0 (map eval-number args))]
+    [(Mul args) (foldl * 1 (map eval-number args))]
     [(Sub fst args) (if (null? args)
-                        (- 0 (eval-number fst))
+                        (- (eval-number fst))
                         (- (eval-number fst)
                            (foldl + 0 (map eval-number args))))]
     [(Div fst args) (let ([denom (foldl * 1 (map eval-number args))])
