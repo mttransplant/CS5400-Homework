@@ -8,9 +8,10 @@ Part 0: Complete Coverage
 Part 1: Fixing Arithmetics
 Part 2: Adding Booleans and Conditionals
 Part 3: Further Extensions
+Part 3b: Further Extensions
 
 Working on:
-Part 3b: Further Extensions
+
 
 Yet to start:
 Part 4: Moving to Programs
