@@ -58,22 +58,21 @@ Part 5: Making the Language Higher Order
 (define (Not expr)
   (If expr (Bool #f) (Bool #t)))
 
-;(: And : ALGAE ALGAE -> ALGAE)
 (: And : (Listof ALGAE) -> ALGAE)
 ;; fake binding for And
 ;; returns True if both exprs are True, else returns False
-#;(define (And e1 e2)
-  (If e1 e2 (Bool #f)))
 (define (And args)
   (cond [(null? args) (Bool #t)]
         [(null? (rest args)) (first args)]
         [else (If (first args) (And (rest args)) (Bool #f))]))
 
-(: Or : ALGAE ALGAE -> ALGAE)
+(: Or : (Listof ALGAE) -> ALGAE)
 ;; fake binding for Or
 ;; returns True if either expr is True, else returns False
-(define (Or e1 e2)
-  (If e1 (Bool #t) e2))
+(define (Or args)
+  (cond [(null? args) (Bool #f)]
+        [(null? (rest args)) (first args)]
+        [else (If (first args) (Bool #t) (Or (rest args)))]))
 
 (: parse-sexpr : Sexpr -> ALGAE)
 ;; parses s-expressions into ALGAEs
@@ -102,10 +101,8 @@ Part 5: Making the Language Higher Order
                                  (parse-sexpr fst)
                                  (parse-sexpr scnd))]
     [(list 'not arg) (Not (parse-sexpr arg))]
-    ;[(list 'and fst scnd) (And (parse-sexpr fst) (parse-sexpr scnd))]
     [(list 'and args ...) (And (parse-sexprs args))]
-    [(list 'or fst scnd) (Or (parse-sexpr fst) (parse-sexpr scnd))]
-    ;[(list 'or args) (Or (parse-sexprs args))]
+    [(list 'or args ...) (Or (parse-sexprs args))]
     [else (error 'parse-sexpr "bad syntax in ~s" sexpr)]))
 
 (: parse : String -> ALGAE)
@@ -312,4 +309,14 @@ Part 5: Making the Language Higher Order
 ;; further extensions
 (test (run "{and True True True True}") => #t)
 (test (run "{and True True True True False}") => #f)
+(test (run "{and True True True True 123}") => 123)
 (test (run "{and}") => #t)
+(test (run "{and True}") => #t)
+(test (run "{and False}") => #f)
+(test (run "{or True False False False False}") => #t)
+(test (run "{or False False False False True}") => #t)
+(test (run "{or False False False False False}") => #f)
+(test (run "{or}") => #f)
+(test (run "{or True}") => #t)
+(test (run "{or False}") => #f)
+(test (run "{or False 123}") => 123)
