@@ -1,6 +1,6 @@
-#lang pl 04
+#lang pl 05
 
-(define minutes-spent 230)
+(define minutes-spent 000)
 
 #|
 Completed:
@@ -8,6 +8,13 @@ Part 0: Complete Coverage
 Part 1: Fixing Arithmetics
 Part 2: Adding Booleans and Conditionals
 Part 3: Further Extensions
+
+Working on:
+Part 3b: Further Extensions
+
+Yet to start:
+Part 4: Moving to Programs
+Part 5: Making the Language Higher Order
 |#
 
 #| BNF for the ALGAE language:
@@ -26,8 +33,8 @@ Part 3: Further Extensions
                | False
                | { If <ALGAE> <ALGAE> <ALGAE> }
                | { not Bool }
-               | { and Bool Bool }
-               | { or Bool Bool }
+               | { and Bool ... }
+               | { or Bool ... }
 |#
 
 ;; ALGAE abstract syntax trees
@@ -51,14 +58,19 @@ Part 3: Further Extensions
 (define (Not expr)
   (If expr (Bool #f) (Bool #t)))
 
-(: And : ALGAE ALGAE -> ALGAE)
+;(: And : ALGAE ALGAE -> ALGAE)
+(: And : (Listof ALGAE) -> ALGAE)
 ;; fake binding for And
 ;; returns True if both exprs are True, else returns False
-(define (And e1 e2)
+#;(define (And e1 e2)
   (If e1 e2 (Bool #f)))
+(define (And args)
+  (cond [(null? args) (Bool #t)]
+        [(null? (rest args)) (first args)]
+        [else (If (first args) (And (rest args)) (Bool #f))]))
 
 (: Or : ALGAE ALGAE -> ALGAE)
-;; fake bindign for Or
+;; fake binding for Or
 ;; returns True if either expr is True, else returns False
 (define (Or e1 e2)
   (If e1 (Bool #t) e2))
@@ -90,8 +102,10 @@ Part 3: Further Extensions
                                  (parse-sexpr fst)
                                  (parse-sexpr scnd))]
     [(list 'not arg) (Not (parse-sexpr arg))]
-    [(list 'and fst scnd) (And (parse-sexpr fst) (parse-sexpr scnd))]
+    ;[(list 'and fst scnd) (And (parse-sexpr fst) (parse-sexpr scnd))]
+    [(list 'and args ...) (And (parse-sexprs args))]
     [(list 'or fst scnd) (Or (parse-sexpr fst) (parse-sexpr scnd))]
+    ;[(list 'or args) (Or (parse-sexprs args))]
     [else (error 'parse-sexpr "bad syntax in ~s" sexpr)]))
 
 (: parse : String -> ALGAE)
@@ -295,3 +309,7 @@ Part 3: Further Extensions
       "eval-boolean: need a boolean when evaluating (Num 123), but got 123")
 (test (run "{or 123 True}") =error>
       "eval-boolean: need a boolean when evaluating (Num 123), but got 123")
+;; further extensions
+(test (run "{and True True True True}") => #t)
+(test (run "{and True True True True False}") => #f)
+(test (run "{and}") => #t)
