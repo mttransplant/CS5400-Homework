@@ -176,8 +176,10 @@ Part 5: Making the Language Higher Order
      eval(B)                = B
      eval({If B E1 E2})     = if evalB(B) then evalN(E1) else evalN(E2)
      eval({not E})          = eval({if E False True})
-     eval({And E1 E2})      = eval({if E1 E2 False})
-     eval({Or E1 E2})       = eval({if E1 True E2})
+     eval({And E})          = E
+     eval({And E ...})      = eval({if (first(E)) (And (rest(E))) False})
+     eval({Or E})           = E
+     eval({Or E1 E2})       = eval({if (first(E)) True (Or (rest(E)))})
 |#
 
 (: eval-number : ALGAE -> Number)
