@@ -11,10 +11,9 @@ Part 3: Further Extensions
 Part 3b: Further Extensions
 
 Working on:
-
+Part 4: Moving to Programs
 
 Yet to start:
-Part 4: Moving to Programs
 Part 5: Making the Language Higher Order
 |#
 
@@ -38,6 +37,14 @@ Part 5: Making the Language Higher Order
                | { or Bool ... }
 |#
 
+#| BNF for the PROGRAM language:
+    <PROGRAM> ::= { program <FUN> ... }
+|#
+
+#| BNF for the FUN language:
+    <FUN>     ::= { fun <id> { <id> } <ALGAE> }
+|#
+
 ;; ALGAE abstract syntax trees
 (define-type ALGAE
   [Num  Number]
@@ -52,6 +59,14 @@ Part 5: Making the Language Higher Order
   [LessEq ALGAE ALGAE]
   [Bool Boolean]
   [If ALGAE ALGAE ALGAE])
+
+;; PROGRAM abstract synatax trees
+(define-type PROGRAM
+  [Funs (Listof FUN)])
+
+;; FUN abstract syntax trees
+(define-type FUN
+  [Fun Symbol Symbol ALGAE])
 
 (: Not : ALGAE -> ALGAE)
 ;; fake binding for Not
@@ -74,6 +89,18 @@ Part 5: Making the Language Higher Order
   (cond [(null? args) (Bool #f)]
         [(null? (rest args)) (first args)]
         [else (If (first args) (Bool #t) (Or (rest args)))]))
+
+(: parse-program : Sexpr -> PROGRAM)
+;; parses a whole program s-expression into a PROGRAM
+(define (parse-program sexpr)
+  (map parse-fun sexpr))
+
+(: parse-fun : Sexpr -> FUN)
+;; parses a function s-expression syntax to an instance of FUN
+(define (parse-fun sexpr)
+  (match sexpr
+    [(list 'fun name arg func) (#|something|#)]
+    [else (error 'parse-fun "bad syntax in ~s" sexpr)]))
 
 (: parse-sexpr : Sexpr -> ALGAE)
 ;; parses s-expressions into ALGAEs
