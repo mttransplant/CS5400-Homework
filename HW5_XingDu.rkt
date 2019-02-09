@@ -444,5 +444,9 @@
       =error> "need a symbol when evaluating (Bool #t), but got #t")
 
 (test (run "{program {fun add1 {n} {+ 1 n}}
-                     {fun main {n} {with {x {quote add1}} {vcall {quote add1} n}}}}" 1)
-      => 2)
+                     {fun main {n}
+                     {with {x {quote add1}}
+                     {vcall {quote add1} n}}}}" 1) => 2)
+
+;; Time log
+(define minutes-spent 330)
