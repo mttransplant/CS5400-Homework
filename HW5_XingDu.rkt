@@ -18,6 +18,8 @@
                | { and <ALGAE> ... }
                | { or <ALGAE> ... }
                | { call <id> <ALGAE> }
+               | { quote <id> }
+               | { vcall <ALGAE> <ALGAE> }
 |#
 
 #| BNF for the PROGRAM
@@ -33,23 +35,11 @@
   [Funs (Listof FUN)])
 
 ;; FUN abstract syntax trees
-(define-type FUN ; 
+(define-type FUN  
   [Fun Symbol Symbol ALGAE])
 
-(: lookup-fun : Symbol PROGRAM -> FUN)
-;; looks up a FUN instance in a PROGRAM given its name
-(define (lookup-fun name prog)
-  (cases prog
-    [(Funs funs)
-     (or
-      (ormap
-       (lambda ([fun : FUN]) 
-         (if (eq? name (cases fun 
-                         [(Fun id arg body) id]))
-             fun
-             #f))
-       funs)
-      (error 'lookup-fun "Fun ~s not found in ~s" name prog))]))
+;; run time values
+(define-type VAL = (U Number Boolean Symbol))
 
 ;; ALGAE abstract syntax trees
 (define-type ALGAE
@@ -65,7 +55,24 @@
   [Equal  ALGAE ALGAE]
   [LessEq ALGAE ALGAE]
   [If     ALGAE ALGAE ALGAE]
-  [Call   Symbol ALGAE])
+  [Call   Symbol ALGAE]
+  [Quote  Symbol]
+  [Vcall  ALGAE ALGAE])
+
+(: lookup-fun : Symbol PROGRAM -> FUN)
+;; looks up a FUN instance in a PROGRAM given its name
+(define (lookup-fun name prog)
+  (cases prog
+    [(Funs funs)
+     (or
+      (ormap
+       (lambda ([fun : FUN]) 
+         (if (eq? name (cases fun 
+                         [(Fun id arg body) id]))
+             fun
+             #f))
+       funs)
+      (error 'lookup-fun "Fun ~s not found in ~s" name prog))]))
 
 (: parse-program : Sexpr -> PROGRAM)
 ;; parses a whole program s-expression into a PROGRAM
@@ -111,6 +118,8 @@
     [(list 'or  args ...) (Or  (parse-exprs args))]
     [(list 'not arg)     (Not (parse-expr arg))]
     [(list 'call (symbol: id) expr) (Call id (parse-expr expr))]
+    [(list 'quote (symbol: id)) (Quote id)]
+    [(list 'vcall expr1 expr2) (Vcall (parse-expr expr1) (parse-expr expr2))]
     [else (error 'parse-expr "bad syntax in ~s" sexpr)]))
 
 (: Not : ALGAE -> ALGAE)
@@ -190,7 +199,9 @@
     [(LessEq lhs rhs) (LessEq (subst* lhs) (subst* rhs))]
     [(If cond then else)
      (If (subst* cond) (subst* then) (subst* else))]
-    [(Call id expr) (Call id (subst* expr))]))
+    [(Call id expr) (Call id (subst* expr))]
+    [(Quote id)     expr]
+    [(Vcall expr1 expr2) (Vcall (subst* expr1) (subst* expr2))]))
 
 #| Formal specs for `eval':
      eval(N)             = N
@@ -235,19 +246,31 @@
                "need a boolean when evaluating ~s, but got ~s"
                expr result))))
 
-(: value->algae : (U Number Boolean) -> ALGAE)
+(: eval-symbol : ALGAE PROGRAM -> Symbol)
+;; helper for 'eval':verifies that the result is a symbol
+(define (eval-symbol expr prog)
+  (let ([result (eval expr prog)])
+    (if (symbol? result)
+        result
+        (error 'eval-symbol
+               "need a symbol when evaluating ~s, but got ~s"
+               expr result))))
+
+(: value->algae : VAL -> ALGAE)
 ;; converts a value to an ALGAE value (so it can be used with `subst')
 (define (value->algae val)
   (cond [(number?  val) (Num val)]
-        [(boolean? val) (Bool val)]))
+        [(boolean? val) (Bool val)]
+        [(symbol? val) (Quote val)]))
 
-(: eval : ALGAE PROGRAM -> (U Number Boolean))
+(: eval : ALGAE PROGRAM -> VAL)
 ;; evaluates ALGAE expressions by reducing them to numbers
 ;; or booleans `prog' is provided for function lookup
 (define (eval expr prog)
   (let ([eval (lambda ([e : ALGAE]) (eval e prog))]
         [eval-number (lambda ([e : ALGAE]) (eval-number e prog))]
-        [eval-boolean (lambda ([e : ALGAE]) (eval-boolean e prog))])
+        [eval-boolean (lambda ([e : ALGAE]) (eval-boolean e prog))]
+        [eval-symbol (lambda ([e : ALGAE]) (eval-symbol e prog))])
     ;; convenient helper
     (: fold-evals : (Number Number -> Number) Number (Listof ALGAE)
        -> Number)
@@ -283,15 +306,22 @@
                          [(Fun id name body) 
                           (eval (subst body
                                        name
-                                       (value->algae (eval exp))))]))])))
+                                       (value->algae (eval exp))))]))]
+      [(Quote id) id]
+      [(Vcall id expr) (let ([fun (lookup-fun (eval-symbol id) prog)])
+                         (cases fun
+                           [(Fun id name body)
+                            (eval (subst body
+                                         name
+                                         (value->algae (eval expr))))]))])))
 
-(: run* : String -> (U Number Boolean))
+(: run* : String -> VAL)
 ;; a version for testing simple ALGAE expressions without
 ;; function calls
 (define (run* str)
   (eval (parse-expr (string->sexpr str)) (Funs null)))
 
-(: run : String (U Number Boolean) -> (U Number Boolean))
+(: run : String VAL -> VAL)
 ;; evaluate a complete ALGAE program contained in a string,
 ;; given a value to pass on to the `main' function
 (define (run str arg)
@@ -391,3 +421,28 @@
 (test (run "{program 1}" 2)=error> "Bad syntax in 1")
 (test (run "{program {fun add1 {n} {+ 1 n}}}" 1) =error> 
       "Fun main not found in (Funs ((Fun add1 n (Add ((Num 1) (Id n))))))")
+(test (run "{program
+  {fun even? {n}
+    {if {= 0 n} True {call odd? {- n 1}}}}
+  {fun odd? {n}
+    {if {= 0 n} False {call even? {- n 1}}}}
+  {fun do_even {n}
+    {/ n 2}}
+  {fun do_odd {n}
+    {+ 1 {* n 3}}}
+  {fun main {n}
+    {if {= n 1}
+      1
+      {+ 1 {call main
+                 {vcall {if {call even? n}
+                          {quote do_even}
+                          {quote do_odd}}
+                        n}}}}}}" 10) => 7)
+
+(test (run "{program {fun add1 {n} {+ n 1}}
+                     {fun main {n} {vcall True 1}}}" 1)
+      =error> "need a symbol when evaluating (Bool #t), but got #t")
+
+(test (run "{program {fun add1 {n} {+ 1 n}}
+                     {fun main {n} {with {x {quote add1}} {vcall {quote add1} n}}}}" 1)
+      => 2)
