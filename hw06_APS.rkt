@@ -46,7 +46,7 @@ Evaluation rules:
   [CMul  CORE CORE]
   [CDiv  CORE CORE]
   [CRef  Natural]
-  [CWith CORE CORE]
+  ;[CWith CORE CORE]
   [CFun  CORE]
   [CCall CORE CORE])
 
@@ -88,11 +88,39 @@ Evaluation rules:
 |#
 
 (define-type ENV = (Listof VAL))
+(define-type DE-ENV = Symbol -> Natural)
 
 (define-type VAL
   [NumV Number]
-  #;[FunV Symbol BRANG ENV]
-  [FunV CORE ENV])
+  [FunV #|Symbol|# CORE ENV])
+
+(: de-empty-env : DE-ENV)
+(define (de-empty-env sym)
+  (error 'empty-env "there is no mapping for ~s" sym))
+
+(: de-extend : DE-ENV Symbol -> DE-ENV)
+;; take a DE-ENV and a symbol, and returns the extended environment
+(define (de-extend env id)
+  (lambda ([sym : Symbol])
+    (if (eq? id sym) 0 (+ 1 (env sym)))))
+
+(: preprocess : BRANG DE-ENV -> CORE)
+;; translates parsed BRANG input into CORE
+(define (preprocess expr de-env)
+  (cases expr
+    [(Num n) (CNum n)]
+    [(Add l r) (CAdd (preprocess l de-env) (preprocess r de-env))]
+    [(Sub l r) (CSub (preprocess l de-env) (preprocess r de-env))]
+    [(Mul l r) (CMul (preprocess l de-env) (preprocess r de-env))]
+    [(Div l r) (CDiv (preprocess l de-env) (preprocess r de-env))]
+    [(With name named-expr bound-body)
+     (CCall (CFun (preprocess bound-body (de-extend de-env name)))
+            (preprocess named-expr de-env))]
+    [(Id name) (CRef (de-env name))]
+    [(Fun bound-id bound-body)
+     (CFun (preprocess bound-body (de-extend de-env bound-id)))]
+    [(Call fun-expr arg-expr) (CCall (preprocess fun-expr de-env)
+                                     (preprocess arg-expr de-env))]))
 
 #|
 (: lookup : Symbol ENV -> VAL)
@@ -127,24 +155,21 @@ Evaluation rules:
     [(CSub l r) (arith-op - (eval l env) (eval r env))]
     [(CMul l r) (arith-op * (eval l env) (eval r env))]
     [(CDiv l r) (arith-op / (eval l env) (eval r env))]
-    [(CWith named-expr bound-body)
-     (eval bound-body
-           (cons (eval named-expr env) env))]
     [(CRef pos) (list-ref env pos)]
     [(CFun bound-body) (FunV bound-body env)]
     [(CCall fun-expr arg-expr)
      (let ([fval (eval fun-expr env)])
        (cases fval
-         [(FunV bound-body f-env)
+         [(FunV #|bound-id|# bound-body f-env)
           (eval bound-body
                 (cons (eval arg-expr env) f-env))]
          [else (error 'eval "`call' expects a function, got: ~s"
                       fval)]))]))
 
 (: run : String -> Number)
-;; evaluate a BRANG program contained in a string
+;; evaluate a FLANG program contained in a string
 (define (run str)
-  (let ([result (eval (parse str) null)])
+  (let ([result (eval (preprocess (parse str) de-empty-env) (list))])
     (cases result
       [(NumV n) n]
       [else (error 'run "evaluation returned a non-number: ~s"
@@ -182,3 +207,20 @@ Evaluation rules:
                         {fun {x} {fun {y} {+ x y}}}}
                   123}")
       => 124)
+(test (run "{with {min2 {fun {x} {- x 2}}}
+              {with {mul6 {fun {x} {* x 6}}}
+                {with {div2 {fun {x} {/ x 2}}}
+                  {call div2 {call mul6 {call min2 8}}}}}}") => 18)
+(test (run "{with x 5}") =error>
+      "parse-sexpr: bad `with' syntax in (with x 5)")
+(test (run "{fun x {+ x 2}}") =error>
+      "parse-sexpr: bad `fun' syntax in (fun x (+ x 2))")
+(test (run "{+ 2}") =error> "parse-sexpr: bad syntax in (+ 2)")
+(test (run "{+ 5 n}") =error> "empty-env: there is no mapping for n")
+(test (run "{+ 5 {fun {x} {+ x 3}}}") =error>
+      "arith-op: expected a number, got: (FunV (CAdd (CRef 0) (CNum 3)) ())")
+(test (run "{call {+ 1 2} 6}") =error>
+      "eval: `call' expects a function, got: (NumV 3)")
+(test (run "{fun {x} {+ x 1}}") =error>
+      (string-append "run: evaluation returned a non-number: "
+                     "(FunV (CAdd (CRef 0) (CNum 1)) ())" ))
