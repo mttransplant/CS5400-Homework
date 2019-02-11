@@ -46,7 +46,6 @@ Evaluation rules:
   [CMul  CORE CORE]
   [CDiv  CORE CORE]
   [CRef  Natural]
-  ;[CWith CORE CORE]
   [CFun  CORE]
   [CCall CORE CORE])
 
@@ -80,12 +79,6 @@ Evaluation rules:
   (parse-sexpr (string->sexpr str)))
 
 ;; Types for environments, values, and a lookup function
-
-#|
-(define-type ENV
-  [EmptyEnv]
-  [Extend Symbol VAL ENV])
-|#
 
 (define-type ENV = (Listof VAL))
 (define-type DE-ENV = Symbol -> Natural)
@@ -122,17 +115,6 @@ Evaluation rules:
     [(Call fun-expr arg-expr) (CCall (preprocess fun-expr de-env)
                                      (preprocess arg-expr de-env))]))
 
-#|
-(: lookup : Symbol ENV -> VAL)
-;; lookup a symbol in an environment, return its value or throw an
-;; error if it isn't bound
-(define (lookup name env)
-  (cases env
-    [(EmptyEnv) (error 'lookup "no binding for ~s" name)]
-    [(Extend id val rest-env)
-     (if (eq? id name) val (lookup name rest-env))]))
-|#
-
 (: NumV->number : VAL -> Number)
 ;; convert a BRANG runtime numeric value to a Racket one
 (define (NumV->number val)
@@ -160,7 +142,7 @@ Evaluation rules:
     [(CCall fun-expr arg-expr)
      (let ([fval (eval fun-expr env)])
        (cases fval
-         [(FunV #|bound-id|# bound-body f-env)
+         [(FunV bound-body f-env)
           (eval bound-body
                 (cons (eval arg-expr env) f-env))]
          [else (error 'eval "`call' expects a function, got: ~s"
