@@ -10,8 +10,8 @@ The grammar:
             | { / <BRANG> <BRANG> }
             | { with { <id> <BRANG> } <BRANG> }
             | <id>
-            | { fun { <id> } <BRANG> }
-            | { call <BRANG> <BRANG> }
+            | { fun { <id> <id> ... } <BRANG> }
+            | { call <BRANG> <BRANG> <BRAND> ... }
 
 Core Evaluation rules:
   eval(N,env)                = N
@@ -36,8 +36,8 @@ Core Evaluation rules:
   [Div  BRANG BRANG]
   [Id   Symbol]
   [With Symbol BRANG BRANG]
-  [Fun  Symbol BRANG]
-  [Call BRANG BRANG])
+  [Fun  (Listof Symbol) BRANG]
+  [Call BRANG (Listof BRANG)])
 
 (define-type CORE
   [CNum  Number]
@@ -62,15 +62,20 @@ Core Evaluation rules:
        [else (error 'parse-sexpr "bad `with' syntax in ~s" sexpr)])]
     [(cons 'fun more)
      (match sexpr
-       [(list 'fun (list (symbol: name)) body)
-        (Fun name (parse-sexpr body))]
+       [(list 'fun (list (symbol: names) ...) body)
+        (if (null? names)
+            (error 'parse-sexpr "no arguments provided in ~s" sexpr)
+            (Fun names (parse-sexpr body)))]
        [else (error 'parse-sexpr "bad `fun' syntax in ~s" sexpr)])]
     [(list '+ lhs rhs) (Add (parse-sexpr lhs) (parse-sexpr rhs))]
     [(list '- lhs rhs) (Sub (parse-sexpr lhs) (parse-sexpr rhs))]
     [(list '* lhs rhs) (Mul (parse-sexpr lhs) (parse-sexpr rhs))]
     [(list '/ lhs rhs) (Div (parse-sexpr lhs) (parse-sexpr rhs))]
-    [(list 'call fun arg)
-     (Call (parse-sexpr fun) (parse-sexpr arg))]
+    [(cons 'call more)
+     (match sexpr
+       [(list 'call fun arg args ...)
+        (Call (parse-sexpr fun) (map parse-sexpr (cons arg args)))]
+       [else (error 'parse-sexpr "no arguments provided in ~s" sexpr)])]   
     [else (error 'parse-sexpr "bad syntax in ~s" sexpr)]))
 
 (: parse : String -> BRANG)
@@ -117,12 +122,19 @@ Core Evaluation rules:
     [(Mul l r) (CMul (helper l) (helper r))]
     [(Div l r) (CDiv (helper l) (helper r))]
     [(With bound-id named-expr bound-body)
-     (helper (Call (Fun bound-id bound-body) named-expr))]
+     (helper (Call (Fun (list bound-id) bound-body) (list named-expr)))]
     [(Id name) (CRef (env name))]
     [(Fun bound-id bound-body)
-     (CFun (preprocess bound-body (de-extend env bound-id)))]
+     (if (null? (cdr bound-id))
+         (CFun (preprocess bound-body (de-extend env (first bound-id))))
+         (helper (Fun (list (first bound-id))
+                      (Fun (rest bound-id) bound-body))))]
     [(Call fun-expr arg-expr)
-     (CCall (helper fun-expr) (helper arg-expr))]))
+     (if (null? (cdr arg-expr))
+         (CCall (helper fun-expr) (helper (first arg-expr)))
+         (helper (Call
+                  (Call fun-expr (list (first arg-expr)))
+                  (rest arg-expr))))]))
 
 (: NumV->number : VAL -> Number)
 ;; convert a BRANG runtime numeric value to a Racket one
@@ -200,8 +212,6 @@ Core Evaluation rules:
                   123}")
       => 124)
 
-
-;; tests from Adam
 (test (run "{call {fun {x} {+ x 1}} 4}")
       => 5)
 (test (run "{with {add3 {fun {x} {+ x 3}}}
@@ -250,3 +260,15 @@ Core Evaluation rules:
 (test (run "{fun {x} {+ x 1}}") =error>
       (string-append "run: evaluation returned a non-number: "
                      "(FunV (CAdd (CRef 0) (CNum 1)) ())" ))
+
+;; test multiple-argument functions and extensions to fun and call
+(test (run "{with {add {fun {x y} {+ x y}}} {call add 1 2}}")
+      => 3)
+(test (run "{with {mul {fun {x y} {* x y}}} {call mul 3 4}}")
+      => 12)
+(test (run "{fun {} 0}")
+      =error> "parse-sexpr: no arguments provided in (fun () 0)")
+(test (run "{call {fun {x} {+ x 1}}}")
+      =error> "parse-sexpr: no arguments provided in (call (fun (x) (+ x 1)))")
+
+(define minutes-spent 240)
