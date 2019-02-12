@@ -96,12 +96,12 @@ Core Evaluation rules:
 (define-type DE-ENV = Symbol -> Natural)
 
 (: de-empty-env : DE-ENV)
-;; as the empty environment, a vacuous mapping — it always throws an error.
+;; as the empty environment, a vacuous mapping — it always throws an error
 (define (de-empty-env id)
   (error 'empty-env "no mapping for ~s" id))
 
 (: de-extend : DE-ENV Symbol -> DE-ENV)
-;; de-extend consumes a DE-ENV and a symbol, and returns the extended environment.
+;; de-extend consumes a DE-ENV and a symbol returns the extended environment
 (define (de-extend env id)
   (lambda([sym : Symbol])
     (if (eq? sym id)
@@ -271,4 +271,4 @@ Core Evaluation rules:
 (test (run "{call {fun {x} {+ x 1}}}")
       =error> "parse-sexpr: no arguments provided in (call (fun (x) (+ x 1)))")
 
-(define minutes-spent 240)
+(define minutes-spent 540)
