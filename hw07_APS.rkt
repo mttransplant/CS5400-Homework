@@ -280,6 +280,10 @@ language that users actually see.
 (test (run "{call {fun {x x} {+ x x}} 10 11}") => 22)
 
 ;; Extending Binders
+(test (run "{bind {{x 1}} {+ x 1}}") => 2)
+(test (run "{bind {{x 1} {y 2}} {+ x y}}") => 3)
+(test (run "{bind* {{x 1} {x {+ x 1}} {x {* x 2}}} x}") => 4)
+(test (run "{bind* {{x 1} {y {+ x 1}} {z {* y 2}}} z}") => 4)
 (test (run "{bind {{x 5}} {bind {{x 2} {y x}} {+ x y}}}") => 7)
 (test (run "{bind {{x 5}} {bind* {{x 2} {y x}} {+ x y}}}") => 4)
 (test (run "{bind {5} {+ 1 2}}")
