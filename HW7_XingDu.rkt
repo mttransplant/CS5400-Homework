@@ -280,12 +280,10 @@ language that users actually see.
 (test (run "{with {add {fun {x y} {- x y}}} {call add 10 4}}")
       => 6)
 
-;; BRAN language is not completely identical to a language
-;; with properly implemented multi-argument functions
-;; 1) can't have zero-argument expressions
-;;(test (run "{call {fun {} 0}}")
-;;      =error> "missing arguments to `call' in (call (fun () 0))")
-;; 2) Discussing the Previous Extension - Improper multi-argument functions
+;; Discussing previous Extensions
+;; Problem 1:
+(test (run "{call {call {fun {x x} x} 1} 2}") => 2)
+;; Problem 2: 
 (test (run "{call {fun {x x} {+ x x}} 10 11}") => 22)
 
 ;; test bind
