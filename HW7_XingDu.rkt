@@ -285,9 +285,8 @@ language that users actually see.
 ;; 1) can't have zero-argument expressions
 ;;(test (run "{call {fun {} 0}}")
 ;;      =error> "missing arguments to `call' in (call (fun () 0))")
-;; 2) can't have non-specified argument number
-(test (run "{call {fun {x y ...} {+ x y}} 1 2 3 4 5}")
-      =error> "eval: `call' expects a function, got: (NumV 3)")
+;; 2) Discussing the Previous Extension - Improper multi-argument functions
+(test (run "{call {fun {x x} {+ x x}} 10 11}") => 22)
 
 ;; test bind
 (test (run "{bind {{x 1}} {+ x 1}}") => 2)
@@ -301,10 +300,10 @@ language that users actually see.
 (test (run "{bind* {} {+ 1 2}}")
       =error> "bad `bind' syntax in (bind*() (+ 1 2))")
 (test (run "{call {fun {x x} {+ x x}} 10 11}") => 22)
+(test (run "{bind {{x 5}} {bind {{x 2} {y x}} {+ x y}}}") => 7)
 (test (run "{bind {{x 5}} {bind* {{x 2} {y x}} {+ x y}}}") => 4)
 (test (run "{bind {5} {+ 1 2}}")
       =error> "parse-sexpr: bad `bind' syntax in (bind (5) (+ 1 2))")
-(test (run "{bind {{x 5}} {bind {{x 2} {y x}} {+ x y}}}") => 7)
 
 ;; test extension
 ;; call a unary function with no arguments returns dummy value
