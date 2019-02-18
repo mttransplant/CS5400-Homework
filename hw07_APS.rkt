@@ -8,6 +8,8 @@ The grammar:
             | { * <BRANG> <BRANG> }
             | { / <BRANG> <BRANG> }
             | { with { <id> <BRANG> } <BRANG> }
+            | { bind { { <id> <BRANG> } { <id> <BRANG> } ...} <BRANG> }
+            | { bind* { { <id> <BRANG> } { <id> <BRANG> } ...} <BRANG> }
             | <id>
             | { fun { <id> <id> ... } <BRANG> }
             | { call <BRANG> <BRANG> <BRANG> ... }
@@ -50,7 +52,6 @@ language that users actually see.
   [CFun  CORE]
   [CCall CORE CORE])
 
-(define dummy 0)
 (: parse-sexpr : Sexpr -> BRANG)
 ;; parses s-expressions into BRANGs
 (define (parse-sexpr sexpr)
@@ -91,7 +92,7 @@ language that users actually see.
      (match sexpr
        [(list 'call fun arg args ...)
         (Call (parse-sexpr fun) (map parse-sexpr (cons arg args)))]
-       [(list 'call fun) (Call (parse-sexpr fun) (list (parse-sexpr dummy)))]
+       [(list 'call fun) (Call (parse-sexpr fun) (list (Num 0)))]
        #;[else (error 'parse-sexpr "missing arguments to `call' in ~s"
                     sexpr)])]
     [else (error 'parse-sexpr "bad syntax in ~s" sexpr)]))
