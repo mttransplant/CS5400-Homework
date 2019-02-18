@@ -153,10 +153,7 @@ language that users actually see.
      ;; Better alternative:
      (sub (Call (Fun (list bound-id) bound-body) (list named-expr)))]
     [(Bind ids exprs body)
-     (if (null? (cdr ids))
-         (sub (Call (Fun ids body) exprs))
-         (sub (With (first ids) (first exprs)
-                    (Bind (rest ids) (rest exprs) body))))]
+     (sub (Call (Fun ids body) exprs))]
     [(Bind* ids exprs body)
      (if (null? (cdr ids))
          (sub (Call (Fun ids body) exprs))
@@ -303,6 +300,11 @@ language that users actually see.
       =error> "bad `bind' syntax in (bind)")
 (test (run "{bind* {} {+ 1 2}}")
       =error> "bad `bind' syntax in (bind*() (+ 1 2))")
+(test (run "{call {fun {x x} {+ x x}} 10 11}") => 22)
+(test (run "{bind {{x 5}} {bind* {{x 2} {y x}} {+ x y}}}") => 4)
+(test (run "{bind {5} {+ 1 2}}")
+      =error> "parse-sexpr: bad `bind' syntax in (bind (5) (+ 1 2))")
+(test (run "{bind {{x 5}} {bind {{x 2} {y x}} {+ x y}}}") => 7)
 
 ;; test extension
 ;; call a unary function with no arguments returns dummy value
