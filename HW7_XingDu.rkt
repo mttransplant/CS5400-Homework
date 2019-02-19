@@ -39,7 +39,7 @@ language that users actually see.
   [With Symbol BRANG BRANG]
   [Bind (Listof Symbol) (Listof BRANG) BRANG]
   [Bind* (Listof Symbol) (Listof BRANG) BRANG]
-  [Fun  (Listof Symbol) BRANG]
+  [Fun  (Listof (U Symbol Boolean)) BRANG]
   [Call BRANG (Listof BRANG)])
 
 (define-type CORE
@@ -53,7 +53,7 @@ language that users actually see.
   [CCall CORE CORE])
 
 ;;dummy value returned by function without arguments
-(define dummy 0)
+(define dummy 1)
 
 (: parse-sexpr : Sexpr -> BRANG)
 ;; parses s-expressions into BRANGs
@@ -84,7 +84,7 @@ language that users actually see.
        [(list 'fun (list (symbol: name) (symbol: names) ...) body)
          (Fun (cons name names) (parse-sexpr body))]
        [(list 'fun null body)
-        (Fun (list 'd) (parse-sexpr body))]
+        (Fun (list #f) (parse-sexpr body))]
        [else (error 'parse-sexpr "bad `fun' syntax in ~s" sexpr)])]
     [(list '+ lhs rhs) (Add (parse-sexpr lhs) (parse-sexpr rhs))]
     [(list '- lhs rhs) (Sub (parse-sexpr lhs) (parse-sexpr rhs))]
@@ -114,14 +114,14 @@ language that users actually see.
 ;; Syntactic environments for the de-Bruijn preprocessing:
 ;; define a type and an empty environment
 
-(define-type DE-ENV = Symbol -> Natural)
+(define-type DE-ENV = (U Symbol Boolean) -> Natural)
 
 (: de-empty-env : DE-ENV)
 ;; the empty syntactic environment, always throws an error
 (define (de-empty-env id)
   (error 'de-env "Free identifier: ~s" id))
 
-(: de-extend : DE-ENV Symbol -> DE-ENV)
+(: de-extend : DE-ENV (U Symbol Boolean) -> DE-ENV)
 ;; extends a given de-env for a new identifier
 (define (de-extend env id)
   (lambda (name)
@@ -286,6 +286,17 @@ language that users actually see.
 ;; Problem 2: 
 (test (run "{call {fun {x x} {+ x x}} 10 11}") => 22)
 
+;; test Extending Function Arguments II
+;; call a unary function with no arguments returns dummy value
+(test (number? (run "{call {fun {x} x}}")) => #t)
+(test (run "{call {fun {} 13}}") => 13)
+(test (run "{call {fun {} {+ 5 8}} }") => 13)
+;; if name the dummy argument that we add to nullary functions dummy
+;; may encounter an actual binding for that same name
+(test (run "{call {fun {x} {+ 1 x}}}") => (+ 1 dummy))
+(test (run "{call {fun {dummy} {+ dummy 1}} 3}") => 4)
+(test (run "{with {dummy 3} {call {fun {} {+ 1 dummy}}}}") => 4)
+
 ;; test bind
 (test (run "{bind {{x 1}} {+ x 1}}") => 2)
 (test (run "{bind {{x 1} {y 2}} {+ x y}}")
@@ -303,9 +314,4 @@ language that users actually see.
 (test (run "{bind {5} {+ 1 2}}")
       =error> "parse-sexpr: bad `bind' syntax in (bind (5) (+ 1 2))")
 
-;; test extension
-;; call a unary function with no arguments returns dummy value
-(test (run "{call {fun {} 0}}") => dummy)
-;; if name the dummy argument that we add to nullary functions dummy
-;; may encounter an actual binding for that same name
-(test (run "{call {fun {x} {+ 1 x}}}") => (+ 1 dummy))
+(define minutes-spent 380)
