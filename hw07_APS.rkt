@@ -8,6 +8,8 @@ The grammar:
             | { * <BRANG> <BRANG> }
             | { / <BRANG> <BRANG> }
             | { with { <id> <BRANG> } <BRANG> }
+            | { bind { { <id> <BRANG> } { <id> <BRANG> } ...} <BRANG> }
+            | { bind* { { <id> <BRANG> } { <id> <BRANG> } ...} <BRANG> }
             | <id>
             | { fun { <id> <id> ... } <BRANG> }
             | { call <BRANG> <BRANG> <BRANG> ... }
@@ -37,7 +39,7 @@ language that users actually see.
   [With Symbol BRANG BRANG]
   [Bind (Listof Symbol) (Listof BRANG) BRANG]
   [Bind* (Listof Symbol) (Listof BRANG) BRANG]
-  [Fun  (Listof Symbol) BRANG]
+  [Fun  (Listof (U Symbol #f)) BRANG]
   [Call BRANG (Listof BRANG)])
 
 (define-type CORE
@@ -78,7 +80,8 @@ language that users actually see.
      (match sexpr
        [(list 'fun (list (symbol: names) ...) body)
         (if (null? names)
-            (error 'parse-sexpr "`fun' with no arguments in ~s" sexpr)
+            ;(error 'parse-sexpr "`fun' with no arguments in ~s" sexpr)
+            (Fun (list #f) (parse-sexpr body))
             (Fun names (parse-sexpr body)))]
        [else (error 'parse-sexpr "bad `fun' syntax in ~s" sexpr)])]
     [(list '+ lhs rhs) (Add (parse-sexpr lhs) (parse-sexpr rhs))]
@@ -89,7 +92,8 @@ language that users actually see.
      (match sexpr
        [(list 'call fun arg args ...)
         (Call (parse-sexpr fun) (map parse-sexpr (cons arg args)))]
-       [else (error 'parse-sexpr "missing arguments to `call' in ~s"
+       [(list 'call fun) (Call (parse-sexpr fun) (list (Num 0)))]
+       #;[else (error 'parse-sexpr "missing arguments to `call' in ~s"
                     sexpr)])]
     [else (error 'parse-sexpr "bad syntax in ~s" sexpr)]))
 
@@ -109,14 +113,14 @@ language that users actually see.
 ;; Syntactic environments for the de-Bruijn preprocessing:
 ;; define a type and an empty environment
 
-(define-type DE-ENV = Symbol -> Natural)
+(define-type DE-ENV = (U Symbol #f) -> Natural)
 
 (: de-empty-env : DE-ENV)
 ;; the empty syntactic environment, always throws an error
 (define (de-empty-env id)
   (error 'de-env "Free identifier: ~s" id))
 
-(: de-extend : DE-ENV Symbol -> DE-ENV)
+(: de-extend : DE-ENV (U Symbol #f) -> DE-ENV)
 ;; extends a given de-env for a new identifier
 (define (de-extend env id)
   (lambda (name)
@@ -255,7 +259,7 @@ language that users actually see.
       =error> "bad `fun' syntax")
 (test (run "{call {fun {x} } 4}")
       =error> "bad `fun' syntax")
-(test (run "{fun {} 1}")
+#;(test (run "{fun {} 1}")
       =error> "`fun' with no arguments")
 (test (run "{with {y} }")
       =error> "bad `with' syntax")
@@ -267,7 +271,7 @@ language that users actually see.
       =error> "arith-op: expected a number")
 (test (run "{call 1 1}")
       =error> "expects a function")
-(test (run "{call {fun {x} x}}")
+#;(test (run "{call {fun {x} x}}")
       =error> "missing arguments to `call'")
 
 ;; test multiple-argument functions
@@ -278,6 +282,7 @@ language that users actually see.
 
 ;; Discussing the Previous Extension - Improper multi-argument functions
 (test (run "{call {fun {x x} {+ x x}} 10 11}") => 22)
+(test (run "{with {f {fun {x y} y}} {call {call f 1} 2}}") => 2)
 
 ;; Extending Binders
 (test (run "{bind {{x 1}} {+ x 1}}") => 2)
@@ -288,3 +293,7 @@ language that users actually see.
 (test (run "{bind {{x 5}} {bind* {{x 2} {y x}} {+ x y}}}") => 4)
 (test (run "{bind {5} {+ 1 2}}")
       =error> "parse-sexpr: bad `bind' syntax in (bind (5) (+ 1 2))")
+
+;; Extending Function Arguments II
+(test (run "{call {fun {} {+ 5 8}} }") => 13)
+(test (run "{call {fun {dummy} {+ dummy 1}} 3}") => 4)

@@ -282,9 +282,12 @@ language that users actually see.
 
 ;; Discussing previous Extensions
 ;; Problem 1:
+(test (run "{with {f {fun {x y} y}} {call {call f 1} 2}}") => 2)
 (test (run "{call {call {fun {x x} x} 1} 2}") => 2)
+
 ;; Problem 2: 
 (test (run "{call {fun {x x} {+ x x}} 10 11}") => 22)
+(test (run "{call {fun {x x} x} 10 11}") => 11)
 
 ;; test Extending Function Arguments II
 ;; call a unary function with no arguments returns dummy value
