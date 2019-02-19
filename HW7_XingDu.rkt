@@ -52,9 +52,6 @@ language that users actually see.
   [CFun  CORE]
   [CCall CORE CORE])
 
-;;dummy value returned by function without arguments
-(define dummy 1)
-
 (: parse-sexpr : Sexpr -> BRANG)
 ;; parses s-expressions into BRANGs
 (define (parse-sexpr sexpr)
@@ -95,7 +92,7 @@ language that users actually see.
        [(list 'call fun arg args ...)
         (Call (parse-sexpr fun) (map parse-sexpr (cons arg args)))]
        [(list 'call fun)
-        (Call (parse-sexpr fun) (list (parse-sexpr dummy)))])]
+        (Call (parse-sexpr fun) (list (Num 0)))])]
     [else (error 'parse-sexpr "bad syntax in ~s" sexpr)]))
 
 (: parse : String -> BRANG)
@@ -282,21 +279,18 @@ language that users actually see.
 
 ;; Discussing previous Extensions
 ;; Problem 1:
-(test (run "{with {f {fun {x y} y}} {call {call f 1} 2}}") => 2)
 (test (run "{call {call {fun {x x} x} 1} 2}") => 2)
-
 ;; Problem 2: 
 (test (run "{call {fun {x x} {+ x x}} 10 11}") => 22)
-(test (run "{call {fun {x x} x} 10 11}") => 11)
 
 ;; test Extending Function Arguments II
 ;; call a unary function with no arguments returns dummy value
-(test (number? (run "{call {fun {x} x}}")) => #t)
 (test (run "{call {fun {} 13}}") => 13)
 (test (run "{call {fun {} {+ 5 8}} }") => 13)
+(test (number? (run "{call {fun {x} {+ 1 x}}}")) => #t)
+(test (run "{call {fun {x} {+ 1 x}}}") => 1)
 ;; if name the dummy argument that we add to nullary functions dummy
 ;; may encounter an actual binding for that same name
-(test (run "{call {fun {x} {+ 1 x}}}") => (+ 1 dummy))
 (test (run "{call {fun {dummy} {+ dummy 1}} 3}") => 4)
 (test (run "{with {dummy 3} {call {fun {} {+ 1 dummy}}}}") => 4)
 
