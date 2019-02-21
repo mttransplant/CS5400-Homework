@@ -9,6 +9,7 @@ The grammar:
             | { / <BRANG> <BRANG> }
             | { with { <id> <BRANG> } <BRANG> }
             | { rec { <id> <BRANG> } <BRANG> }
+            | { if0 <BRANG> <BRANG> <BRANG> }
             | <id>
             | { fun { <id> <id> ... } <BRANG> }
             | { call <BRANG> <BRANG> <BRANG> ... }
