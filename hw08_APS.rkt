@@ -1,14 +1,6 @@
 #lang pl 08
 
 #|
-TO-DO:
-Remember to update the evaluation rules accordingly. Your answer ought to look something like `eval(<BRANG>) = eval(<REWRITTEN-BRANG>)`
-You will need to add if0 to the BNF, to both the BRANG and CORE type definitions (use If0 and CIf0), to the parser, to the evaluation rules, and to the eval function.
-define minutes-spent
-|#
-
-
-#|
 The grammar:
   <BRANG> ::= <num>
             | { + <BRANG> <BRANG> }
@@ -27,6 +19,9 @@ Core evaluation rules:
   eval({- E1 E2},env)        = eval(E1,env) - eval(E2,env)
   eval({* E1 E2},env)        = eval(E1,env) * eval(E2,env)
   eval({/ E1 E2},env)        = eval(E1,env) / eval(E2,env)
+  eval({rec N E1 E2},env)    = eval(call (fun N E2) (fun N E1))
+  eval({if0 E1 E2 E3},env)   = eval(E2,env) if E1 = 0
+                             = eval(E3,env) otherwise
   eval(CRef(N),env)          = list-ref(env,N)
   eval({fun {x} E},env)      = <{fun {x} E}, env>
   eval({call E1 E2},env1)    = eval(Ef,cons(eval(E2,env1),env2))
@@ -42,6 +37,7 @@ language that users actually see.
   [Sub  BRANG BRANG]
   [Mul  BRANG BRANG]
   [Div  BRANG BRANG]
+  ;; add If0 to BRANG
   [If0 BRANG BRANG BRANG]
   [Id   Symbol]
   [With Symbol BRANG BRANG]
@@ -56,6 +52,7 @@ language that users actually see.
   [CSub  CORE CORE]
   [CMul  CORE CORE]
   [CDiv  CORE CORE]
+  ;; add CIf0 to CORE
   [CIf0 CORE CORE CORE]
   [CRef  Natural]
   [CFun  CORE]
@@ -146,8 +143,10 @@ language that users actually see.
 (test (e2 'b) => 1)                      ; and now 'b is mapped to 1
 
 (define Y-combinator
-  ;(parse "{fun {f} {call f {call Y-combinator f}}}"))
-  (parse "{fun {f} {call f {call Y-combinator f}}}"))
+  (parse "{fun {f}
+               {call {fun {x} {call f {fun {n} {call {call x x} n}}}}
+                     {fun {x} {call f {fun {n} {call {call x x} n}}}}}}"))
+
 (: preprocess : BRANG DE-ENV -> CORE)
 ;; replaces identifier expressions into Ref AST values
 (define (preprocess expr de-env)
@@ -165,8 +164,10 @@ language that users actually see.
      ;;        (sub named-expr))
      ;; Better alternative:
      (sub (Call (Fun (list bound-id) bound-body) (list named-expr)))]
+    ;; added WRec preprocessor
     [(WRec bound-id func bound-body)
-     (sub (With bound-id (Call Y-combinator (list func)) bound-body))]
+     (sub (With bound-id (Call Y-combinator
+                               (list (Fun (list bound-id)func))) bound-body))]
     [(Id name) (CRef (de-env name))]
     [(Fun bound-ids bound-body)
      ;; note that bound-ids are never empty
@@ -206,7 +207,10 @@ language that users actually see.
     [(CSub l r) (arith-op - (eval l env) (eval r env))]
     [(CMul l r) (arith-op * (eval l env) (eval r env))]
     [(CDiv l r) (arith-op / (eval l env) (eval r env))]
-    [(CIf0 v t f) (if (zero? (NumV->number (eval v env))) (eval t env) (eval f env))]
+    ;; added CIf0 conditional
+    [(CIf0 v t f) (if (zero? (NumV->number (eval v env)))
+                      (eval t env)
+                      (eval f env))]
     [(CRef n) (list-ref env n)]
     [(CFun bound-body) (FunV bound-body env)]
     [(CCall fun-expr arg-expr)
@@ -214,8 +218,7 @@ language that users actually see.
        (cases fval
          [(FunV bound-body f-env)
           (eval bound-body (cons (eval arg-expr env) f-env))]
-         [else (error 'eval "`call' expects a function, got: ~s"
-                      fval)]))]))
+         [else (error 'eval "`call' expects a function, got: ~s" fval)]))]))
 
 (: run : String -> Number)
 ;; evaluate a BRANG program contained in a string
@@ -288,3 +291,33 @@ language that users actually see.
       => 15)
 (test (run "{with {add {fun {x y} {- x y}}} {call add 10 4}}")
       => 6)
+
+;; test if0
+(test (run "{if0 {- 5 5} 0 1}") => 0)
+(test (run "{if0 {- 6 5} 0 1}") => 1)
+(test (run "{if0 0 0}") =error> "parse-sexpr: bad `if0' syntax in (if0 0 0")
+
+;; testing recs
+(test (run "{rec {fact {fun {n}
+                         {if0 n 1 {* n {call fact {- n 1}}}}}}
+              {call fact 5}}")
+      => 120)
+(test (run "{rec {Y {fun {n}
+                      {if0 n 1 {* n {call Y {- n 1}}}}}}
+              {call Y 5}}")
+      => 120)
+(test (run "{rec {fact {fun {Y}
+                         {if0 Y 1 {* Y {call fact {- Y 1}}}}}}
+              {call fact 5}}")
+      => 120)
+(test (run "{rec {x x} x}") =error> "non-fun form in `rec'")
+
+(test (run "{rec {fact {fun {Y}
+                         {if0 Y 1 {* Y {call fact {- Y 1}}}}}}
+              {call fact 5} 6}")
+      =error> (string-append
+               "parse-sexpr: bad `rec' syntax in "
+               "(rec (fact (fun (Y) (if0 Y 1 (* Y "
+               "(call fact (- Y 1)))))) (call fact 5) 6)"))
+
+(define minutes-spent 420)
