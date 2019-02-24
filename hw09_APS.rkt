@@ -65,4 +65,4 @@
 (test (not (scan "()(")))
 (test (not (scan "())")))
 
-(define minutes-spent 140)
+(define minutes-spent 180)
