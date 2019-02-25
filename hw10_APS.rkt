@@ -40,14 +40,13 @@
 ;; comparison for natural numbers
 (define =
   (lambda (x y)
-    (and (zero? (- x y)) (zero? (- y x)))))
+    (zero? (diff x y))))
 ;; tests
 (test (->bool (= 0 0)) => '#t)
 (test (->bool (= 1 1)) => '#t)
 (test (->bool (= (* (* 2 3) 2) (* 3 4))) => '#t)
 (test (->bool (= 1 0)) => '#f)
 
-#|
 ;; ==================== List utilities ====================
 
 ;; define this to test list functions
@@ -60,25 +59,32 @@
 ;; racket)
 (define/rec ref
   (lambda (n list)
-    ???))
+    (if (zero? n) (car list) (ref (- n 1) (cdr list)))))
 ;; tests
 (test (->nat (ref 0 l123)) => '1)
 (test (->nat (ref 1 l123)) => '2)
 (test (->nat (ref 2 l123)) => '3)
+(test (->nat (ref 0 l12)) => '1)
+(test (->nat (ref 1 l12)) => '2)
 
 ;; map : (A -> B) (Listof A) -> (Listof B)
 ;; maps the given function on the list, return a list of the results
 (define/rec map
-  ???)
+  (lambda (f l)
+    (if (null? l) l (cons (f (car l)) (map f (cdr l))))))
 ;; tests
 (test (->listof ->nat (map add1 null)) => '())
 (test (->listof ->nat (map add1 l123)) => '(2 3 4))
+(test (->listof ->nat (map sub1 l123)) => '(0 1 2))
+
 
 ;; append : (Listof A) (Listof A) -> (Listof A)
 ;; appends the two input lists
 (define/rec append
   (lambda (l1 l2)
-    ???))
+    (if (null? l1)
+        l2
+        (cons (car l1) (append (cdr l1) l2)))))
 ;; tests
 (test (->listof ->nat (append null null)) => '())
 (test (->listof ->nat (append null l123)) => '(1 2 3))
@@ -89,7 +95,9 @@
 ;; consumes a list of lists, and appends them all to a single list
 (define/rec append*
   (lambda (lists)
-    ???))
+    (if (null? lists) 
+        lists
+        (append (car lists) (append* (cdr lists))))))
 ;; tests
 (test (->listof ->nat (append* null)) => '())
 (test (->listof ->nat (append* (cons null null))) => '())
@@ -98,7 +106,8 @@
                                            (cons l12
                                                  (cons l123 null))))))
       => '(1 2 3 1 2 1 2 3))
-
+ 
+#|
 ;; Note: the following definitions can be hard to fill-in, it will be
 ;; much easier if you do this first in the course language -- see the
 ;; template file that is included with the homework.
