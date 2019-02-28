@@ -94,7 +94,7 @@
 (define/rec append*
   (lambda (lists)
     (if (null? lists)
-        null
+        lists
         (append (car lists) (append* (cdr lists))))))
 ;; tests
 (test (->listof ->nat (append* null)) => '())
@@ -115,8 +115,9 @@
 (define/rec interleave
   (lambda (x list)
     (if (null? list)
-      (cons (cons x null) null)
-      ???)))
+        (cons (cons x null) null)
+        (cons (cons x list)
+              (map (cons (car list) (interleave x (cdr list))))))))
 ;; tests
 (test (->listof (->listof ->nat) (interleave 0 null)) => '((0)))
 (test (->listof (->listof ->nat) (interleave 0 l123))
@@ -127,10 +128,10 @@
 (define/rec permutations
   (lambda (list)
     (if (null? list)
-      (cons null null)
-      ;; use `append*', `interleave', and a recursive call to
-      ;; `permutations'
-      ???)))
+        (cons null null)
+        ;; use `append*', `interleave', and a recursive call to
+        ;; `permutations'
+        (append* (map (interleave (car list)) (permutations (cdr list)))))))
 ;; tests
 (test (->listof (->listof ->nat) (permutations null))
       => '(()))
@@ -146,7 +147,14 @@
 ;; given a predicate and a list, return a list of the items that
 ;; satisfy the predicate
 (define/rec filter
-  ???)
+  (lambda (f list)
+    (if (null? list)
+        list
+        (cons
+         (if (f (car list))
+             (car list)
+             null)
+         (filter f (cdr list))))))
 ;; tests
 (test (->listof ->nat (filter (lambda (n) #t) l123))
       => '(1 2 3))
@@ -159,7 +167,11 @@
 ;; determines whether the given number is included in the given list
 ;; (note: unlike Racket's `member', this is limited to numbers, and
 ;; returns a boolean)
-???
+(define/rec member?
+  (lambda (n list)
+    (and (not (null? list)
+              (or (eq? n (car list))
+                  (member? (cdr list)))))))
 ;; tests
 (test (->bool (member? 2 l123)) => '#t)
 (test (->bool (member? 4 l123)) => '#f)
@@ -168,22 +180,29 @@
 ;; determines if the given list of numbers is unique
 (define/rec unique?
   (lambda (list)
-    (or ???
-        (and ???))))
+    (or (null? list)
+        (and (not (member? (car list) (cdr list)))
+             (unique? (cdr list))))))
 ;; tests
 (test (->bool (unique? l123)) => '#t)
 (test (->bool (unique? (cons 2 l123))) => '#f)
 
 ;; from-to : Nat Nat -> (Listof Nat)
 ;; returns a list of numbers from lo (inclusive) to hi (exclusive)
-???
+(define from-to
+  (lambda(n1 n2)
+    (if (= n1 n2)
+        null
+        (cons n1 (from-to (add1 n1) n2)))))
 ;; tests
 (test (->listof ->nat (from-to 2 2)) => '())
 (test (->listof ->nat (from-to 2 5)) => '(2 3 4))
 
 ;; range : Nat -> (Listof Nat)
 ;; returns a list of numbers from 0 (inclusive) to N (exclusive)
-???
+(define range
+  (lambda (n)
+    (from-to 0 n)))
 ;; tests
 (test (->listof ->nat (range 0)) => '())
 (test (->listof ->nat (range 1)) => '(0))
@@ -215,8 +234,8 @@
 (define von-koch
   (lambda (edges)
     (with [n (add1 (length edges))]
-      (with [assignments (permutations (range n))]
-        ???))))
+          (with [assignments (permutations (range n))]
+                ???))))
 
 ;; ==================== Main test ====================
 
@@ -234,13 +253,13 @@
 (define/rec pair-list*
   (lambda (k x)
     (if (null? x)
-      (k null)
-      (pair-list* (lambda (r) (k (cons x r)))))))
+        (k null)
+        (pair-list* (lambda (r) (k (cons x r)))))))
 (define pair-list (pair-list* identity))
 ;; test the testing utility...
 (test (->listof ->nat
-       (with [xs (pair-list (cons 1 2) (cons 3 4) (cons 5 6) null)]
-         (append (map car xs) (map cdr xs))))
+                (with [xs (pair-list (cons 1 2) (cons 3 4) (cons 5 6) null)]
+                      (append (map car xs) (map cdr xs))))
       => '(1 3 5 2 4 6))
 
 ;; This is an encoding of the simple graph from the homework:
