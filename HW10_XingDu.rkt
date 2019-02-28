@@ -330,3 +330,6 @@
 (define johns-solution (car (von-koch johns-graph)))
 
 |#
+
+(define hours-spent (add1 4))
+(test (->nat hours-spent) => '5)
