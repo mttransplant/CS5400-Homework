@@ -117,7 +117,7 @@
     (if (null? list)
         (cons (cons x null) null)
         (cons (cons x list)
-              (map (cons (car list) (interleave x (cdr list))))))))
+              (map (cons (car list)) (interleave x (cdr list)))))))
 ;; tests
 (test (->listof (->listof ->nat) (interleave 0 null)) => '((0)))
 (test (->listof (->listof ->nat) (interleave 0 l123))
@@ -150,11 +150,9 @@
   (lambda (f list)
     (if (null? list)
         list
-        (cons
-         (if (f (car list))
-             (car list)
-             null)
-         (filter f (cdr list))))))
+        (if (f (car list))
+            (cons (car list) (filter f (cdr list)))
+            (filter f (cdr list))))))
 ;; tests
 (test (->listof ->nat (filter (lambda (n) #t) l123))
       => '(1 2 3))
@@ -169,9 +167,9 @@
 ;; returns a boolean)
 (define/rec member?
   (lambda (n list)
-    (and (not (null? list)
-              (or (eq? n (car list))
-                  (member? (cdr list)))))))
+    (and (not (null? list))
+         (or (= n (car list))
+             (member? n (cdr list))))))
 ;; tests
 (test (->bool (member? 2 l123)) => '#t)
 (test (->bool (member? 4 l123)) => '#f)
@@ -189,7 +187,7 @@
 
 ;; from-to : Nat Nat -> (Listof Nat)
 ;; returns a list of numbers from lo (inclusive) to hi (exclusive)
-(define from-to
+(define/rec from-to
   (lambda(n1 n2)
     (if (= n1 n2)
         null
@@ -219,7 +217,8 @@
   (lambda (edges assignment)
     (unique? (map (lambda (edge)
                     ;; use `ref' with the car and cdr of the edge
-                    ???)
+                    (diff (ref (car edge) assignment)
+                          (ref (cdr edge) assignment)))
                   edges))))
 
 ;; von-koch : (Listof (Pair Nat Nat)) -> (Listof (Listof Nat))
@@ -235,7 +234,8 @@
   (lambda (edges)
     (with [n (add1 (length edges))]
           (with [assignments (permutations (range n))]
-                ???))))
+                (filter (lambda (x)
+                          (graceful? edges x)) assignments)))))
 
 ;; ==================== Main test ====================
 
