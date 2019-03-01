@@ -107,7 +107,7 @@
                                                  (cons l123 null))))))
       => '(1 2 3 1 2 1 2 3))
  
-#|
+
 ;; Note: the following definitions can be hard to fill-in, it will be
 ;; much easier if you do this first in the course language -- see the
 ;; template file that is included with the homework.
@@ -118,12 +118,14 @@
 (define/rec interleave
   (lambda (x list)
     (if (null? list)
-      (cons (cons x null) null)
-      ???)))
+        (cons (cons x null) null)
+        (cons (cons x list)
+              (map (cons (car list)) (interleave x (cdr list)))))))
 ;; tests
 (test (->listof (->listof ->nat) (interleave 0 null)) => '((0)))
 (test (->listof (->listof ->nat) (interleave 0 l123))
       => '((0 1 2 3) (1 0 2 3) (1 2 0 3) (1 2 3 0)))
+
 
 ;; permutations : (Listof A) -> (Listof (Listof A))
 ;; returns a list of all possible permutations of the input list
@@ -133,7 +135,7 @@
       (cons null null)
       ;; use `append*', `interleave', and a recursive call to
       ;; `permutations'
-      ???)))
+      (append* (map (interleave (car list)) (permutations (cdr list)))))))
 ;; tests
 (test (->listof (->listof ->nat) (permutations null))
       => '(()))
@@ -145,11 +147,18 @@
 (test (->listof (->listof ->nat) (permutations l123))
       => '((1 2 3) (2 1 3) (2 3 1) (1 3 2) (3 1 2) (3 2 1)))
 
+
 ;; filter : (A -> Bool) (Listof A) -> (Listof A)
 ;; given a predicate and a list, return a list of the items that
 ;; satisfy the predicate
 (define/rec filter
-  ???)
+  (lambda (f)
+    (lambda (list)
+      (if (null? list)
+          null
+          (if (f (car list))
+                    (cons (car list) (filter f (cdr list)))
+                    (filter f (cdr list)))))))
 ;; tests
 (test (->listof ->nat (filter (lambda (n) #t) l123))
       => '(1 2 3))
@@ -162,7 +171,12 @@
 ;; determines whether the given number is included in the given list
 ;; (note: unlike Racket's `member', this is limited to numbers, and
 ;; returns a boolean)
-???
+(define/rec member?
+  (lambda (n)
+    (lambda (list)
+      (if (null? list)
+          #f
+          (if (= n (car list) #t (member? n (cdr list))))))))
 ;; tests
 (test (->bool (member? 2 l123)) => '#t)
 (test (->bool (member? 4 l123)) => '#f)
@@ -171,22 +185,30 @@
 ;; determines if the given list of numbers is unique
 (define/rec unique?
   (lambda (list)
-    (or ???
-        (and ???))))
+    (or (null? list)
+        (and (not (member? (car list) (cdr list)))
+             (unique? (cdr list))))))
 ;; tests
 (test (->bool (unique? l123)) => '#t)
 (test (->bool (unique? (cons 2 l123))) => '#f)
 
 ;; from-to : Nat Nat -> (Listof Nat)
 ;; returns a list of numbers from lo (inclusive) to hi (exclusive)
-???
+(define/rec from-to
+  (lambda (lo)
+    (lambda (hi)
+      (if (zero? (diff lo hi))
+          null
+          (cons lo (from-to (add1 lo) hi))))))
 ;; tests
 (test (->listof ->nat (from-to 2 2)) => '())
 (test (->listof ->nat (from-to 2 5)) => '(2 3 4))
 
 ;; range : Nat -> (Listof Nat)
 ;; returns a list of numbers from 0 (inclusive) to N (exclusive)
-???
+(define range
+  (lambda (n)
+    (from-to 0 n)))
 ;; tests
 (test (->listof ->nat (range 0)) => '())
 (test (->listof ->nat (range 1)) => '(0))
@@ -203,8 +225,11 @@
   (lambda (edges assignment)
     (unique? (map (lambda (edge)
                     ;; use `ref' with the car and cdr of the edge
-                    ???)
+                    (diff (ref (car edge) assignment)
+                          (ref (cdr edge) assignment)))
                   edges))))
+
+
 
 ;; von-koch : (Listof (Pair Nat Nat)) -> (Listof (Listof Nat))
 ;; The main function consumes a tree graph represented as a list of
@@ -219,7 +244,9 @@
   (lambda (edges)
     (with [n (add1 (length edges))]
       (with [assignments (permutations (range n))]
-        ???))))
+        (filter (lambda (a)
+                  (graceful? edges a))
+                assignments)))))
 
 ;; ==================== Main test ====================
 
@@ -269,8 +296,12 @@
 
 ;; Here we compute and test the node labeling (note that like the test
 ;; for `permutations', this test is not a good one!)
+
+
 (define simple-solution (car (von-koch simple-graph)))
 (test (->listof ->nat simple-solution) => '(3 4 5 2 0 6 1))
+
+
 ;; This labeling corresponds to this graph, shown with the differences
 ;;
 ;;    3   6---2
@@ -283,10 +314,13 @@
 ;;    |
 ;;    4
 
+
 #| Finally, this is John's graph.
    Warning: this can take a long time to run -- it is here only if you
    want to try it for yourself, do not submit with it.
 
+(define  7 (add1  6))
+(define  8 (add1  7))
 (define  7 (add1  6))
 (define  8 (add1  7))
 (define  9 (add1  8))
@@ -314,4 +348,5 @@
 (define johns-solution (car (von-koch johns-graph)))
 
 |#
-|#
+(define hours-spent (+ 4 4))
+(test (->nat hours-spent) => '8)
