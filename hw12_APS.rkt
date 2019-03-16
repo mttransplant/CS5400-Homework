@@ -11,6 +11,7 @@
            | { bind {{ <id> <TOY> } ... } <TOY> <TOY> ... }
            | { bindrec {{ <id> <TOY> } ... } <TOY> <TOY> ... }
            | { fun { <id> ... } <TOY> <TOY> ... }
+           | { rfun { <id> ... } <TOY> <TOY> ... }
            | { if <TOY> <TOY> <TOY> }
            | { <TOY> <TOY> ... }
            | { set! <id> <TOY> }
@@ -23,6 +24,7 @@
   [Bind (Listof Symbol) (Listof TOY) (Listof TOY)]
   [BindRec (Listof Symbol) (Listof TOY) (Listof TOY)]
   [Fun  (Listof Symbol) (Listof TOY)]
+  [RFun  (Listof Symbol) (Listof TOY)]
   [Call TOY (Listof TOY)]
   [If   TOY TOY TOY]
   [Set Symbol TOY])
@@ -52,11 +54,12 @@
                                (map parse-sexpr (cons body0 body)))
             (error 'parse-sexpr "duplicate `~s' names: ~s" binder names))]
        [else (error 'parse-sexpr "bad `~s' syntax in ~s" binder sexpr)])]
-    [(cons 'fun more)
+    [(cons (and binder (or 'fun 'rfun)) more)
      (match sexpr
-       [(list 'fun (list (symbol: names) ...) body0 body ...)
+       [(list _ (list (symbol: names) ...) body0 body ...)
         (if (unique-list? names)
-            (Fun names (map parse-sexpr (cons body0 body)))
+            ((if (eq? binder 'fun)
+                 Fun RFun) names (map parse-sexpr (cons body0 body)))
             (error 'parse-sexpr "duplicate `fun' names: ~s" names))]
        [else (error 'parse-sexpr "bad `fun' syntax in ~s" sexpr)])]
     [(cons 'if more)
@@ -93,7 +96,7 @@
 
 (define-type VAL
   [RktV  Any]
-  [FunV  (Listof Symbol) (Listof TOY) ENV]
+  [FunV  (Listof Symbol) (Listof TOY) ENV Boolean]
   [PrimV ((Listof VAL) -> VAL)]
   [BogusV])
 
@@ -195,14 +198,28 @@
     [(BindRec names exprs bound-body)
      (eval-body bound-body (extend-rec names exprs env))]
     [(Fun names bound-body)
-     (FunV names bound-body env)]
-    [(Call fun-expr arg-exprs)
-     (let ([fval (eval* fun-expr)]
-           [arg-vals (map eval* arg-exprs)])
+     (FunV names bound-body env #f)]
+    [(RFun names bound-body)
+     (FunV names bound-body env #t)]
+    [(Call fun-expr arg-exprs)     
+     (let ([fval (eval* fun-expr)])
        (cases fval
-         [(PrimV proc) (proc arg-vals)]
-         [(FunV names body fun-env)
-          (eval-body body (extend names arg-vals fun-env))]
+         [(PrimV proc) (proc (map eval* arg-exprs))]
+         [(FunV names body fun-env by-ref?)
+          ;; helper utility
+          (: get-boxes : (Listof TOY) ENV -> (Listof (Boxof VAL)))
+          ;; returns a suitable list of boxes for a list of expressions
+          (define (get-boxes a-exprs e)
+            (map (lambda ([a-expr : TOY])
+                   (cases a-expr
+                     [(Id name) (lookup name e)]
+                     [else (error 'rfun "non-identifier")]))
+                 a-exprs))
+          (if by-ref?
+              (eval-body body (raw-extend names
+                                          (get-boxes arg-exprs env)
+                                          fun-env))
+              (eval-body body (extend names (map eval* arg-exprs) fun-env)))]
          [else (error 'eval "function call with a non-function: ~s"
                       fval)]))]
     [(If cond-expr then-expr else-expr)
@@ -279,6 +296,19 @@
               {+ {foo} {* 10 {foo}}}}")
       => 21)
 
+;; tests for by-reference function arguments
+(test (run "{{rfun {x} x} {/ 4 0}}") =error> "non-identifier")
+(test (run "{5 {/ 6 0}}") =error> "non-function")
+(test (run "{bind {{swap! {rfun {x y}
+                            {bind {{tmp x}}
+                              {set! x y}
+                              {set! y tmp}}}}
+                   {a 1}
+                   {b 2}}
+              {swap! a b}
+              {+ a {* 10 b}}}")
+      => 12)
+
 ;; More tests for complete coverage
 (test (run "{bind x 5 x}")      =error> "bad `bind' syntax")
 (test (run "{fun x x}")         =error> "bad `fun' syntax")
@@ -297,3 +327,4 @@
 (test (run "{fun {x} x}")       =error> "returned a bad value")
 
 ;;; ----------------------------------------------------------------
+(define minutes-spent 420)
