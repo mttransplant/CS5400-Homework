@@ -8,9 +8,9 @@
 #| The BNF:
    <TOY> ::= <num>
            | <id>
-           | { bind {{ <id> <TOY> } ... } <TOY> }
-           | { bindrec {{ <id> <TOY> } ... } <TOY>}
-           | { fun { <id> ... } <TOY> }
+           | { bind {{ <id> <TOY> } ... } <TOY> <TOY> ... }
+           | { bindrec {{ <id> <TOY> } ... } <TOY> <TOY> ... }
+           | { fun { <id> ... } <TOY> <TOY> ... }
            | { if <TOY> <TOY> <TOY> }
            | { <TOY> <TOY> ... }
            | { set! <id> <TOY> }
@@ -20,9 +20,9 @@
 (define-type TOY
   [Num  Number]
   [Id   Symbol]
-  [Bind (Listof Symbol) (Listof TOY) TOY]
-  [BindRec (Listof Symbol) (Listof TOY) TOY]
-  [Fun  (Listof Symbol) TOY]
+  [Bind (Listof Symbol) (Listof TOY) (Listof TOY)]
+  [BindRec (Listof Symbol) (Listof TOY) (Listof TOY)]
+  [Fun  (Listof Symbol) (Listof TOY)]
   [Call TOY (Listof TOY)]
   [If   TOY TOY TOY]
   [Set Symbol TOY])
@@ -40,30 +40,23 @@
   (match sexpr
     [(number: n)    (Num n)]
     [(symbol: name) (Id name)]
-    ;; prior version
-    #;[(cons 'bind more)
-       (match sexpr
-         [(list 'bind (list (list (symbol: names) (sexpr: nameds)) ...) body)
-          (if (unique-list? names)
-              (Bind names (map parse-sexpr nameds) (parse-sexpr body))
-              (error 'parse-sexpr "duplicate `bind' names: ~s" names))]
-         [else (error 'parse-sexpr "bad `bind' syntax in ~s" sexpr)])]
-    ;; new version
     [(cons (and binder (or 'bind 'bindrec)) more)
      (match sexpr
-       [(list _ (list (list (symbol: names) (sexpr: nameds)) ...) body)
+       [(list _ (list (list (symbol: names) (sexpr: nameds)) ...)
+              body0
+              body ...)
         (if (unique-list? names)
-            ((if (eq? binder 'bind) Bind BindRec)
-             names
-             (map parse-sexpr nameds)
-             (parse-sexpr body))
+            ((if (eq? binder 'bind)
+                 Bind BindRec) names
+                               (map parse-sexpr nameds)
+                               (map parse-sexpr (cons body0 body)))
             (error 'parse-sexpr "duplicate `~s' names: ~s" binder names))]
        [else (error 'parse-sexpr "bad `~s' syntax in ~s" binder sexpr)])]
     [(cons 'fun more)
      (match sexpr
-       [(list 'fun (list (symbol: names) ...) body)
+       [(list 'fun (list (symbol: names) ...) body0 body ...)
         (if (unique-list? names)
-            (Fun names (parse-sexpr body))
+            (Fun names (map parse-sexpr (cons body0 body)))
             (error 'parse-sexpr "duplicate `fun' names: ~s" names))]
        [else (error 'parse-sexpr "bad `fun' syntax in ~s" sexpr)])]
     [(cons 'if more)
@@ -100,7 +93,7 @@
 
 (define-type VAL
   [RktV  Any]
-  [FunV  (Listof Symbol) TOY ENV]
+  [FunV  (Listof Symbol) (Listof TOY) ENV]
   [PrimV ((Listof VAL) -> VAL)]
   [BogusV])
 
@@ -186,13 +179,21 @@
   ;; convenient helper
   (: eval* : TOY -> VAL)
   (define (eval* expr) (eval expr env))
+  ;; another convenient helper
+  (: eval-body : (Listof TOY) ENV -> VAL)
+  ;; evaluates a list of expressions, returns the last value.
+  (define (eval-body exprs env)
+    (let ([x (eval (car exprs) env)])
+      (if (null? (cdr exprs))
+          x
+          (eval-body (cdr exprs) env))))
   (cases expr
     [(Num n)   (RktV n)]
     [(Id name) (unbox (lookup name env))]
     [(Bind names exprs bound-body)
-     (eval bound-body (extend names (map eval* exprs) env))]
+     (eval-body bound-body (extend names (map eval* exprs) env))]
     [(BindRec names exprs bound-body)
-     (eval bound-body (extend-rec names exprs env))]
+     (eval-body bound-body (extend-rec names exprs env))]
     [(Fun names bound-body)
      (FunV names bound-body env)]
     [(Call fun-expr arg-exprs)
@@ -201,7 +202,7 @@
        (cases fval
          [(PrimV proc) (proc arg-vals)]
          [(FunV names body fun-env)
-          (eval body (extend names arg-vals fun-env))]
+          (eval-body body (extend names arg-vals fun-env))]
          [else (error 'eval "function call with a non-function: ~s"
                       fval)]))]
     [(If cond-expr then-expr else-expr)
@@ -260,6 +261,23 @@
                                 {* n {fact {- n 1}}}}}}}
               {fact 5}}")
       => 120)
+
+;; tests for multiple body expressions
+(test (run "{bind {{make-counter
+                     {fun {}
+                       {bind {{c 0}}
+                         {fun {}
+                           {set! c {+ 1 c}}
+                           c}}}}}
+              {bind {{c1 {make-counter}}
+                     {c2 {make-counter}}}
+                {* {c1} {c1} {c2} {c1}}}}")
+      => 6)
+(test (run "{bindrec {{foo {fun {}
+                             {set! foo {fun {} 2}}
+                             1}}}
+              {+ {foo} {* 10 {foo}}}}")
+      => 21)
 
 ;; More tests for complete coverage
 (test (run "{bind x 5 x}")      =error> "bad `bind' syntax")
