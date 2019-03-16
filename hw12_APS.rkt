@@ -9,6 +9,7 @@
    <TOY> ::= <num>
            | <id>
            | { bind {{ <id> <TOY> } ... } <TOY> }
+           | { bindrec {{ <id> <TOY> } ... } <TOY>}
            | { fun { <id> ... } <TOY> }
            | { if <TOY> <TOY> <TOY> }
            | { <TOY> <TOY> ... }
@@ -20,6 +21,7 @@
   [Num  Number]
   [Id   Symbol]
   [Bind (Listof Symbol) (Listof TOY) TOY]
+  [BindRec (Listof Symbol) (Listof TOY) TOY]
   [Fun  (Listof Symbol) TOY]
   [Call TOY (Listof TOY)]
   [If   TOY TOY TOY]
@@ -38,15 +40,25 @@
   (match sexpr
     [(number: n)    (Num n)]
     [(symbol: name) (Id name)]
-    [(cons 'bind more)
+    ;; prior version
+    #;[(cons 'bind more)
+       (match sexpr
+         [(list 'bind (list (list (symbol: names) (sexpr: nameds)) ...) body)
+          (if (unique-list? names)
+              (Bind names (map parse-sexpr nameds) (parse-sexpr body))
+              (error 'parse-sexpr "duplicate `bind' names: ~s" names))]
+         [else (error 'parse-sexpr "bad `bind' syntax in ~s" sexpr)])]
+    ;; new version
+    [(cons (and binder (or 'bind 'bindrec)) more)
      (match sexpr
-       [(list 'bind (list (list (symbol: names) (sexpr: nameds))
-                          ...)
-              body)
+       [(list _ (list (list (symbol: names) (sexpr: nameds)) ...) body)
         (if (unique-list? names)
-            (Bind names (map parse-sexpr nameds) (parse-sexpr body))
-            (error 'parse-sexpr "duplicate `bind' names: ~s" names))]
-       [else (error 'parse-sexpr "bad `bind' syntax in ~s" sexpr)])]
+            ((if (eq? binder 'bind) Bind BindRec)
+             names
+             (map parse-sexpr nameds)
+             (parse-sexpr body))
+            (error 'parse-sexpr "duplicate `~s' names: ~s" binder names))]
+       [else (error 'parse-sexpr "bad `~s' syntax in ~s" binder sexpr)])]
     [(cons 'fun more)
      (match sexpr
        [(list 'fun (list (symbol: names) ...) body)
@@ -109,6 +121,16 @@
 (define (extend names values env)
   (raw-extend names (map (inst box VAL) values) env))
 
+(: extend-rec : (Listof Symbol) (Listof TOY) ENV -> ENV)
+;; extends an environment with a new recursive frame.
+(define (extend-rec names exprs env)
+  (let* ([new-cells (map (lambda (x) (box the-bogus-value)) exprs)]
+         [new-env (raw-extend names new-cells env)]
+         [values (map (lambda ([expr : TOY]) (eval expr new-env)) exprs)])
+    (for-each (lambda ([n : (Boxof VAL)] [v : VAL]) (set-box! n v))
+              new-cells values)
+    new-env))
+
 (: lookup : Symbol ENV -> (Boxof VAL))
 ;; lookup a symbol in an environment, frame by frame,
 ;; return its value or throw an error if it isn't bound
@@ -169,6 +191,8 @@
     [(Id name) (unbox (lookup name env))]
     [(Bind names exprs bound-body)
      (eval bound-body (extend names (map eval* exprs) env))]
+    [(BindRec names exprs bound-body)
+     (eval bound-body (extend-rec names exprs env))]
     [(Fun names bound-body)
      (FunV names bound-body env)]
     [(Call fun-expr arg-exprs)
@@ -228,6 +252,14 @@
 (test (run "{set! x}") =error> "parse-sexpr: bad `set!' syntax in (set! x)")
 (test (run "{set! {bind {{x 3}}} 4}") =error>
       "parse-sexpr: bad `set!' syntax in (set! (bind ((x 3))) 4)")
+
+;; tests for bindrec
+(test (run "{bindrec {{fact {fun {n}
+                              {if {= 0 n}
+                                1
+                                {* n {fact {- n 1}}}}}}}
+              {fact 5}}")
+      => 120)
 
 ;; More tests for complete coverage
 (test (run "{bind x 5 x}")      =error> "bad `bind' syntax")
