@@ -12,6 +12,7 @@
            | { fun { <id> ... } <TOY> }
            | { if <TOY> <TOY> <TOY> }
            | { <TOY> <TOY> ... }
+           | { set! <id> <TOY> }
 |#
 
 ;; A matching abstract syntax tree datatype:
@@ -21,7 +22,8 @@
   [Bind (Listof Symbol) (Listof TOY) TOY]
   [Fun  (Listof Symbol) TOY]
   [Call TOY (Listof TOY)]
-  [If   TOY TOY TOY])
+  [If   TOY TOY TOY]
+  [Set Symbol TOY])
 
 (: unique-list? : (Listof Any) -> Boolean)
 ;; Tests whether a list is unique, guards Bind and Fun values.
@@ -59,6 +61,11 @@
             (parse-sexpr then)
             (parse-sexpr else))]
        [else (error 'parse-sexpr "bad `if' syntax in ~s" sexpr)])]
+    [(cons 'set! more)
+     (match sexpr
+       [(list 'set! (symbol: name) body)
+        (Set name (parse-sexpr body))]
+       [else (error 'parse-sexpr "bad `set!' syntax in ~s" sexpr)])]
     [(list fun args ...) ; other lists are applications
      (Call (parse-sexpr fun)
            (map parse-sexpr args))]
@@ -82,7 +89,10 @@
 (define-type VAL
   [RktV  Any]
   [FunV  (Listof Symbol) TOY ENV]
-  [PrimV ((Listof VAL) -> VAL)])
+  [PrimV ((Listof VAL) -> VAL)]
+  [BogusV])
+
+(define the-bogus-value (BogusV))
 
 (: raw-extend : (Listof Symbol) (Listof (Boxof VAL)) ENV -> ENV)
 ;; extends an environment with a new frame.
@@ -175,7 +185,10 @@
                   [(RktV v) v] ; Racket value => use as boolean
                   [else #t])   ; other values are always true
                 then-expr
-                else-expr))]))
+                else-expr))]
+    [(Set name bound-body)
+     (let ([x (set-box! (lookup name env) (eval* bound-body))])
+       the-bogus-value)]))
 
 (: run : String -> Any)
 ;; evaluate a TOY program contained in a string
@@ -210,6 +223,11 @@
               {fun {x} {fun {y} {+ x y}}}}
              123}")
       => 124)
+;; tests for set!
+(test (run "{bind {{x 3}} {bind {{y {set! x 4}}} x}}") => 4)
+(test (run "{set! x}") =error> "parse-sexpr: bad `set!' syntax in (set! x)")
+(test (run "{set! {bind {{x 3}}} 4}") =error>
+      "parse-sexpr: bad `set!' syntax in (set! (bind ((x 3))) 4)")
 
 ;; More tests for complete coverage
 (test (run "{bind x 5 x}")      =error> "bad `bind' syntax")
