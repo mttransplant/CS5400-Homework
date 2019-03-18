@@ -120,12 +120,15 @@
 (: extend-rec : (Listof Symbol) (Listof TOY) ENV -> ENV)
 ;; extends an environment with a new recursive frame.
 (define (extend-rec names exprs env)
-  (let* ([new-cells (map (lambda (x) (box the-bogus-value)) exprs)]
-         [new-env (raw-extend names new-cells env)]
-         [values (map (lambda ([expr : TOY]) (eval expr new-env)) exprs)])
-    (for-each (lambda ([n : (Boxof VAL)] [v : VAL]) (set-box! n v))
-              new-cells values)
-    new-env))
+  (if (null? names)
+      env
+      (let* ([new-cell (box the-bogus-value)] ;temp value
+             [new-env (raw-extend (list (car names))
+                                  (list new-cell) env)]
+             [new-value (eval (car exprs) new-env)])
+        (set-box! new-cell new-value)
+        (extend-rec (cdr names)
+                    (cdr exprs) new-env))))
 
 (: lookup : Symbol ENV -> (Boxof VAL))
 ;; lookup a symbol in an environment, frame by frame,
@@ -270,8 +273,12 @@
 (test (run "{set! x}") =error> "parse-sexpr: bad `set!' syntax in (set! x)")
 (test (run "{set! {bind {{x 3}}} 4}") =error>
       "parse-sexpr: bad `set!' syntax in (set! (bind ((x 3))) 4)")
+(test (run "{bind {{x 5}} {bind {{y {set! x 6}}} 2}}")
+      => 2)
 
 ;; tests for bindrec
+(test (run "{bindrec {{x 3} {y {+ x 3}} {z {+ y 4}}} {+ z 2}}")
+      => 12)
 (test (run "{bindrec {{fact {fun {n}
                               {if {= 0 n}
                                 1
