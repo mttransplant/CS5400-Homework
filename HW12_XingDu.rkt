@@ -181,9 +181,9 @@
 (: eval-body : (Listof TOY) ENV -> VAL)
 ;; evaluates a list of expressions, returns the last value.
 (define (eval-body exprs env)
-  (if (null? (cdr exprs))
-      (eval (car exprs) env)
-      (eval-body (cdr exprs) env)))
+  (foldl (lambda ([expr : TOY] [bogus : VAL]) (eval expr env))
+         the-bogus-value
+         exprs))
 
 (: eval : TOY ENV -> VAL)
 ;; evaluates TOY expressions.
@@ -209,7 +209,8 @@
        (cases fval
          [(PrimV proc) (proc arg-vals)]
          [(FunV names body fun-env)
-          (eval-body body (extend names arg-vals fun-env))]
+          (eval-body body
+                     (extend names arg-vals fun-env))]
          [else (error 'eval "function call with a non-function: ~s"
                       fval)]))]
     [(If cond-expr then-expr else-expr)
@@ -262,6 +263,12 @@
 ;; tests for bind-rec
 (test (run "{bindrec {{x 3} {y {+ x 3}} {z {+ y 4}}}{+ z 2}}")
       => 12)
+(test (run "{bindrec {{fact {fun {n}
+                              {if {= 0 n}
+                                1
+                                {* n {fact {- n 1}}}}}}}
+              {fact 5}}")
+      => 120)
 ;; More tests for complete coverage
 (test (run "{bind x 5 x}")      =error> "bad `binder' syntax")
 (test (run "{fun x x}")         =error> "bad `fun' syntax")
