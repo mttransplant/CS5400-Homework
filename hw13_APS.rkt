@@ -444,7 +444,11 @@
 ;; coverage tests for compiler disabled errors
 (test (compile (parse "{5}"))
       =error> "compile: compiler disabled")
-(test (compile-body (list (parse "{bind {{add3 {fun {x} {+ x 3}}}} {add3 1}}")))
+(test (compile-body
+       (list (parse "{bind {{add3 {fun {x} {+ x 3}}}} {add3 1}}")))
       =error> "compile: compiler disabled")
-(test (compile-get-boxes (list (parse "{bind {{add3 {fun {x} {+ x 3}}}} {add3 1}}")))
+(test (compile-get-boxes
+       (list (parse "{bind {{add3 {fun {x} {+ x 3}}}} {add3 1}}")))
       =error> "compile: compiler disabled")
+
+(define minutes-spent 400)
