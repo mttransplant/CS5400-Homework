@@ -407,3 +407,5 @@
       =error> "compiler disabled")
 (test (compile-get-boxes (list (Id 'name)))
       =error> "compiler disabled")
+
+(define minutes-spent 490)
