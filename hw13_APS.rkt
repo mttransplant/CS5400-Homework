@@ -121,21 +121,6 @@
 (define (extend names values env)
   (raw-extend names (map (inst box VAL) values) env))
 
-;; Old extend-rec
-;(: extend-rec : (Listof Symbol) (Listof TOY) ENV -> ENV)
-;; extends an environment with a new recursive frame (given
-;; expressions).
-#;(define (extend-rec names exprs env)
-    (define new-env
-      (extend names (map (lambda (_) the-bogus-value) exprs) env))
-    ;; note: no need to check the lengths here, since this is only
-    ;; called for `bindrec', and the syntax make it impossible to have
-    ;; different lengths
-    (for-each (lambda ([name : Symbol] [expr : TOY])
-                (set-box! (lookup name new-env) ((compile expr) new-env)))
-              names exprs)
-    new-env)
-
 (: extend-rec : (Listof Symbol) (Listof (ENV -> VAL)) ENV -> ENV)
 ;; extends an environment with a new recursive frame (given
 ;; expressions).
@@ -198,22 +183,6 @@
 ;;; ==================================================================
 ;;; Evaluation
 
-;; Old eval-body
-;(: eval-body : (Listof TOY) ENV -> VAL)
-;; evaluates a list of expressions, returns the last value.
-#;(define (eval-body exprs env)
-    ;; note: relies on the fact that the body is never empty
-    (let ([1st  ((compile (first exprs)) env)]
-          [rest (rest exprs)])
-      (if (null? rest)
-          1st
-          (eval-body rest env)))
-    ;; a shorter version that uses `foldl'
-    ;; (foldl (lambda ([expr : TOY] [old : VAL]) (eval expr env))
-    ;;        (eval (first exprs) env)
-    ;;        (rest exprs))
-    )
-
 (: compile-body : (Listof TOY) -> (ENV -> VAL))
 ;; compiles a list of expressions, returns a function that will return
 ;; the last value at run time.
@@ -231,18 +200,6 @@
               1st
               (new-eval rest-exprs))))
       (new-eval compiled-exprs))))
-
-;; Old version of get-boxes
-;; (: get-boxes : (Listof TOY) ENV -> (Listof (Boxof VAL)))
-;; utility for applying rfun
-#;(define (get-boxes exprs env)
-    (map (lambda ([e : TOY])
-           (cases e
-             [(Id name) (lookup name env)]
-             [else (error 'eval
-                          "rfun application with a non-identifier: ~s"
-                          e)]))
-         exprs))
 
 (: compile-get-boxes : (Listof TOY) -> (ENV -> (Listof (Boxof VAL))))
 ;; utility for applying rfun
@@ -333,12 +290,6 @@
 
 (: run : String -> Any)
 ;; evaluate a TOY program contained in a string
-#; (define (run str)
-     (let ([result ((compile (parse str)) global-environment)])
-       (cases result
-         [(RktV v) v]
-         [else (error 'run "evaluation returned a bad value: ~s"
-                      result)])))
 (define (run str)
   (set-box! compiler-enabled? #t)
   (let ([compiled (compile (parse str))])
