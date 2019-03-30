@@ -86,9 +86,7 @@
 ;;; Values and environments
 (define-type BINDINGS = (Listof (Listof Symbol)))
 
-(define-type ENV
-  [EmptyEnv]
-  [FrameEnv FRAME ENV])
+(define-type ENV = (Listof FRAME))
 
 ;; a frame is an association list of names and values.
 (define-type FRAME = (Listof (List Symbol (Boxof VAL))))
@@ -107,7 +105,7 @@
 ;; boxes
 (define (raw-extend names boxed-values env)
   (if (= (length names) (length boxed-values))
-    (FrameEnv (map (lambda ([name : Symbol] [boxed-val : (Boxof VAL)])
+    (cons (map (lambda ([name : Symbol] [boxed-val : (Boxof VAL)])
                      (list name boxed-val))
                    names boxed-values)
               env)
@@ -162,13 +160,13 @@
 (: lookup : Symbol ENV -> (Boxof VAL))
 ;; looks for a name in an environment, searching through each frame.
 (define (lookup name env)
-  (cases env
-    [(EmptyEnv) (error 'lookup "no binding for ~s" name)]
-    [(FrameEnv frame rest)
-     (let ([cell (assq name frame)])
+  (cond
+    [(null? env) (error 'lookup "no binding for ~s" name)]
+    [else
+     (let ([cell (assq name (first env))])
        (if cell
          (second cell)
-         (lookup name rest)))]))
+         (lookup name (rest env))))]))
 
 (: unwrap-rktv : VAL -> Any)
 ;; helper for `racket-func->prim-val': unwrap a RktV wrapper in
@@ -190,9 +188,9 @@
                 (RktV (list-func (map unwrap-rktv args)))))))
 
 ;; The global environment has a few primitives:
-(: global-environment : ENV)
+(: global-environment : (Listof (List Symbol (Boxof VAL))))
 (define global-environment
-  (FrameEnv (list (list '+ (racket-func->prim-val +))
+  (list (list '+ (racket-func->prim-val +))
                   (list '- (racket-func->prim-val -))
                   (list '* (racket-func->prim-val *))
                   (list '/ (racket-func->prim-val /))
@@ -201,8 +199,7 @@
                   (list '= (racket-func->prim-val =))
                   ;; values
                   (list 'true  (box (RktV #t)))
-                  (list 'false (box (RktV #f))))
-            (EmptyEnv)))
+                  (list 'false (box (RktV #f)))))
 
 ;;; ==================================================================
 ;;; Compilation
@@ -342,7 +339,7 @@
   (set-box! compiler-enabled? #t)
   (let ([compiled (compile (parse str) '())])
     (set-box! compiler-enabled? #f)
-    (let ([result (compiled global-environment)])
+    (let ([result (compiled (list global-environment))])
       (cases result
         [(RktV v) v]
         [else (error 'run "the program returned a bad value: ~s"
