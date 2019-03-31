@@ -47,24 +47,24 @@
     [(cons (and binder (or 'bind 'bindrec)) more)
      (match sexpr
        [(list _ (list (list (symbol: names) (sexpr: nameds)) ...)
-          body0 body ...)
+              body0 body ...)
         (if (unique-list? names)
-          ((if (eq? 'bind binder) Bind BindRec)
-           names
-           (map parse-sexpr nameds)
-           (map parse-sexpr (cons body0 body)))
-          (error 'parse-sexpr "duplicate `~s' names: ~s" binder names))]
+            ((if (eq? 'bind binder) Bind BindRec)
+             names
+             (map parse-sexpr nameds)
+             (map parse-sexpr (cons body0 body)))
+            (error 'parse-sexpr "duplicate `~s' names: ~s" binder names))]
        [else (error 'parse-sexpr "bad `~s' syntax in ~s"
                     binder sexpr)])]
     [(cons (and funner (or 'fun 'rfun)) more)
      (match sexpr
        [(list _ (list (symbol: names) ...)
-          body0 body ...)
+              body0 body ...)
         (if (unique-list? names)
-          ((if (eq? 'fun funner) Fun RFun)
-           names
-           (map parse-sexpr (cons body0 body)))
-          (error 'parse-sexpr "duplicate `~s' names: ~s" funner names))]
+            ((if (eq? 'fun funner) Fun RFun)
+             names
+             (map parse-sexpr (cons body0 body)))
+            (error 'parse-sexpr "duplicate `~s' names: ~s" funner names))]
        [else (error 'parse-sexpr "bad `~s' syntax in ~s"
                     funner sexpr)])]
     [(cons 'if more)
@@ -89,47 +89,48 @@
 (define-type ENV = (Listof FRAME))
 
 ;; a frame is an association list of names and values.
-(define-type FRAME = (Listof (List Symbol (Boxof VAL))))
+(define-type FRAME = (Listof (Boxof VAL)))
 
 (define-type VAL
   [BogusV]
   [RktV  Any]
-  [FunV  (Listof Symbol) (ENV -> VAL) ENV Boolean] ; `byref?' flag
+  [FunV  Natural (ENV -> VAL) ENV Boolean] ; `byref?' flag
   [PrimV ((Listof VAL) -> VAL)])
 
 ;; a single bogus value to use wherever needed
 (define the-bogus-value (BogusV))
 
-(: raw-extend : (Listof Symbol) (Listof (Boxof VAL)) ENV -> ENV)
+;;(: raw-extend : (Listof Symbol) (Listof (Boxof VAL)) ENV -> ENV)
 ;; extends an environment with a new frame, given names and value
 ;; boxes
-(define (raw-extend names boxed-values env)
-  (if (= (length names) (length boxed-values))
-    (cons (map (lambda ([name : Symbol] [boxed-val : (Boxof VAL)])
-                     (list name boxed-val))
-                   names boxed-values)
-              env)
-    (error 'raw-extend "arity mismatch for names: ~s" names)))
+;;(define (raw-extend names boxed-values env)
+;;  (if (= (length names) (length boxed-values))
+;;      (cons (map (lambda ([name : Symbol] [boxed-val : (Boxof VAL)])
+;;                   (list name boxed-val))
+;;                 names boxed-values)
+;;            env)
+;;      (error 'raw-extend "arity mismatch for names: ~s" names)))
 
-(: extend : (Listof Symbol) (Listof VAL) ENV -> ENV)
+;;(: extend : (Listof Symbol) (Listof VAL) ENV -> ENV)
 ;; extends an environment with a new frame (given plain values).
-(define (extend names values env)
-  (raw-extend names (map (inst box VAL) values) env))
+;;(define (extend names values env)
+;;  (raw-extend names (map (inst box VAL) values) env))
 
-(: extend-rec : (Listof Symbol) (Listof (ENV -> VAL)) ENV -> ENV)
+(: extend-rec : (Listof (ENV -> VAL)) ENV -> ENV)
 ;; extends an environment with a new recursive frame (given compiled
 ;; expressions).
-(define (extend-rec names compiled-exprs env)
+(define (extend-rec compiled-exprs env)
   (define new-env
-    (extend names
-            (map (lambda (_) the-bogus-value) compiled-exprs)
-            env))
+    (cons (map (inst box VAL)
+               (map (lambda (_) the-bogus-value) compiled-exprs))
+          env))
   ;; note: no need to check the lengths here, since this is only
   ;; called for `bindrec', and the syntax make it impossible to have
   ;; different lengths
-  (for-each (lambda ([name : Symbol] [compiled : (ENV -> VAL)])
-              (set-box! (lookup name new-env) (compiled new-env)))
-            names compiled-exprs)
+  (for-each (lambda ([ref : (Boxof VAL)]
+                     [compiled : (ENV -> VAL)])
+              (set-box! ref (compiled new-env)))
+            (car new-env) compiled-exprs)
   new-env)
 
 (: find-index : Symbol BINDINGS -> (U (List Natural Natural) #f))
@@ -147,26 +148,23 @@
       [else (find-pos (rest binding) (add1 n))]))
   ;; helper function
   (: find-ind : BINDINGS Natural -> (U (List Natural Natural) #f))
-  ;; find the index with row number 
+  ;; find the index with row number
   (define (find-ind bind m)
     (if (null? bind)
         #f
         (let([n (find-pos (first bind) 0)])
-          (if n
+          (if (number? n)
               (list m n)
               (find-ind (rest bind) (add1 m))))))
   (find-ind bindings 0))
 
-(: lookup : Symbol ENV -> (Boxof VAL))
-;; looks for a name in an environment, searching through each frame.
-(define (lookup name env)
-  (cond
-    [(null? env) (error 'lookup "no binding for ~s" name)]
-    [else
-     (let ([cell (assq name (first env))])
-       (if cell
-         (second cell)
-         (lookup name (rest env))))]))
+(: global-lookup : Symbol -> VAL) 
+;; looks for a name in global environment, searching through each frame.
+(define (global-lookup name)
+  (let ([cell (assq name global-environment)])
+    (match cell
+      [(list a b) b]
+      [else (error 'global-lookup "no binding for ~s" name)])))
 
 (: unwrap-rktv : VAL -> Any)
 ;; helper for `racket-func->prim-val': unwrap a RktV wrapper in
@@ -176,7 +174,7 @@
     [(RktV v) v]
     [else (error 'racket-func "bad input: ~s" x)]))
 
-(: racket-func->prim-val : Function -> (Boxof VAL))
+(: racket-func->prim-val : Function -> VAL)
 ;; converts a racket function to a primitive evaluator function which
 ;; is a PrimV holding a ((Listof VAL) -> VAL) function.  (the
 ;; resulting function will use the list function as is, and it is the
@@ -184,22 +182,22 @@
 ;; bad number of arguments or bad input types.)
 (define (racket-func->prim-val racket-func)
   (define list-func (make-untyped-list-function racket-func))
-  (box (PrimV (lambda (args)
-                (RktV (list-func (map unwrap-rktv args)))))))
+  (PrimV (lambda (args)
+           (RktV (list-func (map unwrap-rktv args))))))
 
 ;; The global environment has a few primitives:
-(: global-environment : (Listof (List Symbol (Boxof VAL))))
+(: global-environment : (Listof (List Symbol VAL)))
 (define global-environment
   (list (list '+ (racket-func->prim-val +))
-                  (list '- (racket-func->prim-val -))
-                  (list '* (racket-func->prim-val *))
-                  (list '/ (racket-func->prim-val /))
-                  (list '< (racket-func->prim-val <))
-                  (list '> (racket-func->prim-val >))
-                  (list '= (racket-func->prim-val =))
-                  ;; values
-                  (list 'true  (box (RktV #t)))
-                  (list 'false (box (RktV #f)))))
+        (list '- (racket-func->prim-val -))
+        (list '* (racket-func->prim-val *))
+        (list '/ (racket-func->prim-val /))
+        (list '< (racket-func->prim-val <))
+        (list '> (racket-func->prim-val >))
+        (list '= (racket-func->prim-val =))
+        ;; values
+        (list 'true  (RktV #t))
+        (list 'false (RktV #f))))
 
 ;;; ==================================================================
 ;;; Compilation
@@ -219,11 +217,11 @@
   (let ([compiled-1st (compile (first exprs) bindings)]
         [rest         (rest exprs)])
     (if (null? rest)
-      compiled-1st
-      (let ([compiled-rest (compile-body rest bindings)])
-        (lambda (env)
-          (define ignored (compiled-1st env))
-          (compiled-rest env)))))
+        compiled-1st
+        (let ([compiled-rest (compile-body rest bindings)])
+          (lambda (env)
+            (define ignored (compiled-1st env))
+            (compiled-rest env)))))
   ;; the same thing, but using `foldl' to do the loop
   ;; (foldl (lambda ([expr : TOY] [compiled-prev : (ENV -> VAL)])
   ;;          (let ([compiled (compile expr)])
@@ -252,7 +250,11 @@
   (define (compile-getter expr)
     (cases expr
       [(Id name)
-       (lambda ([env : ENV]) (lookup name env))]
+       (let ([pos (find-index name bindings)])
+         (lambda ([env : ENV])
+           (match pos
+             [(list a b) (get-box-from-index pos env)]
+             [#f (error 'compiler "mutating global value")])))]
       [else
        (lambda ([env : ENV])
          (error 'call "rfun application with a non-identifier ~s"
@@ -264,6 +266,11 @@
       (map (lambda ([get-box : (ENV -> (Boxof VAL))]) (get-box env))
            getters))))
 
+;; a helper function to find the right box from env and indexes
+(: get-box-from-index : (List Natural Natural) ENV -> (Boxof VAL))
+(define (get-box-from-index indexes env)
+  (list-ref (list-ref env (car indexes)) (cadr indexes)))
+
 (: compile : TOY BINDINGS -> (ENV -> VAL))
 ;; compiles TOY expressions to Racket functions.
 (define (compile expr bindings)
@@ -274,51 +281,71 @@
   (: compile* : TOY -> (ENV -> VAL))
   (define (compile* expr)
     (compile expr bindings))
+  (: boxed-runner : ENV -> ((ENV -> VAL) -> (Boxof VAL)))
+  (define (boxed-runner env)
+    (lambda (compiled) ((inst box VAL) (compiled env))))
   (unless (unbox compiler-enabled?)
     (error 'compile "compiler disabled"))
   (cases expr
     [(Num n)   (lambda ([env : ENV]) (RktV n))]
-    [(Id name) (lambda ([env : ENV]) (unbox (lookup name env)))]
+    [(Id name)
+     (let ([indexes (find-index name bindings)])
+       (match indexes
+         [(list a b) (lambda ([env : ENV])
+                       (unbox (get-box-from-index indexes env)))]
+         [#f (lambda ([env : ENV]) (global-lookup name))]))]
     [(Set name new)
-     (define compiled-new (compile new bindings))
-     (lambda ([env : ENV])
-       (set-box! (lookup name env) (compiled-new env))
-       the-bogus-value)]
+     (let([compiled-new (compile* new)]
+          [id (find-index name bindings)])
+       (if id
+           (lambda ([env : ENV]) 
+             (set-box! (get-box-from-index id env) (compiled-new env))
+             the-bogus-value)
+           (when (global-lookup name)
+             (error 'compile "Trying to mutating a global"))))]
     [(Bind names exprs bound-body)
      (define compiled-exprs (map compile* exprs))
      (define compiled-body  (compile-body bound-body (cons names bindings)))
      (lambda ([env : ENV])
        (compiled-body
-        (extend names (map (runner env) compiled-exprs) env)))]
+        (cons (map (boxed-runner env) compiled-exprs) env)))]
     [(BindRec names exprs bound-body)
      (define compiled-exprs (map compile* exprs))
      (define compiled-body  (compile-body bound-body (cons names bindings)))
      (lambda ([env : ENV])
-       (compiled-body (extend-rec names compiled-exprs env)))]
+       (compiled-body (extend-rec compiled-exprs env)))]
     [(Fun names bound-body)
      (define compiled-body (compile-body bound-body (cons names bindings)))
+     (define name-length (length names))
      (lambda ([env : ENV])
-       (FunV names compiled-body env #f))]
+       (FunV name-length compiled-body env #f))]
     [(RFun names bound-body)
      (define compiled-body (compile-body bound-body (cons names bindings)))
+     (define name-length (length names))
      (lambda ([env : ENV])
-       (FunV names compiled-body env #t))]
+       (FunV name-length compiled-body env #t))]
     [(Call fun-expr arg-exprs)
      (define compiled-fun  (compile* fun-expr))
      (define compiled-args (map compile* arg-exprs))
      (define compiled-boxes-getter (compile-get-boxes arg-exprs bindings))
+     (define arg-length (length arg-exprs))
      (lambda ([env : ENV])
        (define fval (compiled-fun env))
+       (define boxed-arg-vals (lambda ()
+                                (map (boxed-runner env) compiled-args)))
        ;; delay evaluating the arguments
-       (define arg-vals (lambda () (map (runner env) compiled-args)))
+       (define arg-vals (lambda ()
+                          (map (runner env)
+                               compiled-args)))
        (cases fval
          [(PrimV proc) (proc (arg-vals))]
-         [(FunV names compiled-body fun-env byref?)
-          (compiled-body (if byref?
-                           (raw-extend names
-                                       (compiled-boxes-getter env)
+         [(FunV name-length compiled-body fun-env byref?)
+          (if (= arg-length name-length)
+              (compiled-body (if byref?
+                                 (cons (compiled-boxes-getter env)
                                        fun-env)
-                           (extend names (arg-vals) fun-env)))]
+                                 (cons (boxed-arg-vals) fun-env)))
+              (error 'FunV "arity mismatch with ~s" arg-exprs))]
          [else (error 'call "function call with a non-function: ~s"
                       fval)]))]
     [(If cond-expr then-expr else-expr)
@@ -329,8 +356,8 @@
        ((if (cases (compiled-cond env)
               [(RktV v) v] ; Racket value => use as boolean
               [else #t])   ; other values are always true
-          compiled-then
-          compiled-else)
+            compiled-then
+            compiled-else)
         env))]))
 
 (: run : String -> Any)
@@ -339,7 +366,7 @@
   (set-box! compiler-enabled? #t)
   (let ([compiled (compile (parse str) '())])
     (set-box! compiler-enabled? #f)
-    (let ([result (compiled (list global-environment))])
+    (let ([result (compiled null)])
       (cases result
         [(RktV v) v]
         [else (error 'run "the program returned a bad value: ~s"
@@ -415,7 +442,7 @@
                              {set! foo {fun {} 2}}
                              1}}}
               {+ {foo} {* 10 {foo}}}}")
-      => 21)
+      => 21) 
 
 ;; `rfun' tests
 (test (run "{{rfun {x} x} 4}") =error> "non-identifier")
