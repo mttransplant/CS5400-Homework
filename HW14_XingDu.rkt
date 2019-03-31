@@ -310,8 +310,11 @@
        (compiled-body
         (cons (map (boxed-runner env) compiled-exprs) env)))]
     [(BindRec names exprs bound-body)
-     (define compiled-exprs (map compile* exprs))
-     (define compiled-body  (compile-body bound-body (cons names bindings)))
+     (define new-bindings (cons names bindings))
+     (define compiled-exprs
+       (map (lambda ([expr : TOY])
+                                   (compile expr new-bindings)) exprs))
+     (define compiled-body  (compile-body bound-body new-bindings))
      (lambda ([env : ENV])
        (compiled-body (extend-rec compiled-exprs env)))]
     [(Fun names bound-body)
@@ -364,7 +367,7 @@
 ;; compiles and runs a TOY program contained in a string
 (define (run str)
   (set-box! compiler-enabled? #t)
-  (let ([compiled (compile (parse str) '())])
+  (let ([compiled (compile (parse str) null)])
     (set-box! compiler-enabled? #f)
     (let ([result (compiled null)])
       (cases result
@@ -413,6 +416,9 @@
 (test (run "{if {< 5 4} 6 7}")  => 7)
 (test (run "{if + 6 7}")        => 6)
 (test (run "{fun {x} x}")       =error> "returned a bad value")
+(test (run "{set! + /}")        =error> "Trying") ;;compile-time
+(test (run "{{rfun {x} {+ x 1}} +}") =error> "compiler: mutating global value") ;;run-time
+(test (run "{{rfun {x} {+ x 1}} y}") =error> "compiler: mutating global value")
 
 ;; assignment tests
 (test (run "{set! {+ x 1} x}")  =error> "bad `set!' syntax")
@@ -474,3 +480,15 @@
 (test (find-index 'e '((a b c) () (c d e))) => '(2 2))
 (test (find-index 'c '((a b c) () (c d e))) => '(0 2))
 (test (find-index 'x '((a b c) () (c d e))) => #f)
+
+#|
+(time (run "{bindrec {{fib {fun {n}
+                            {if {< n 2}
+                              n
+                              {+ {fib {- n 1}}
+                                  {fib {- n 2}}}}}}}
+              {fib 27}}"))
+;; original TOY cpu time: 9564 real time: 8537 gc time: 1126
+;; basic compiler cpu time: 4563 real time: 4611 gc time: 439
+;; This version cpu time: 3966 real time: 3978 gc time: 708
+|#
