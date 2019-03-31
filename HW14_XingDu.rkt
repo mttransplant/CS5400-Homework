@@ -494,3 +494,5 @@
 ;; basic compiler cpu time: 4563 real time: 4611 gc time: 439
 ;; This version cpu time: 2895 real time: 2919 gc time: 531
 |#
+
+(define minutes-spent 820)
