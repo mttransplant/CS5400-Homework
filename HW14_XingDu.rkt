@@ -250,11 +250,12 @@
   (define (compile-getter expr)
     (cases expr
       [(Id name)
-       (let ([pos (find-index name bindings)])
+       (let ([id (find-index name bindings)])
          (lambda ([env : ENV])
-           (match pos
-             [(list a b) (get-box-from-index pos env)]
-             [#f (error 'compiler "mutating global value")])))]
+           (if id
+             (get-box-from-index id env)
+             (when (global-lookup name)
+               (error 'compiler "mutating global value")))))]
       [else
        (lambda ([env : ENV])
          (error 'call "rfun application with a non-identifier ~s"
@@ -289,11 +290,11 @@
   (cases expr
     [(Num n)   (lambda ([env : ENV]) (RktV n))]
     [(Id name)
-     (let ([indexes (find-index name bindings)])
-       (match indexes
-         [(list a b) (lambda ([env : ENV])
-                       (unbox (get-box-from-index indexes env)))]
-         [#f (lambda ([env : ENV]) (global-lookup name))]))]
+     (let ([id (find-index name bindings)])
+       (lambda ([env : ENV])
+         (if id 
+             (unbox (get-box-from-index id env))
+             (global-lookup name))))]
     [(Set name new)
      (let([compiled-new (compile* new)]
           [id (find-index name bindings)])
@@ -313,7 +314,7 @@
      (define new-bindings (cons names bindings))
      (define compiled-exprs
        (map (lambda ([expr : TOY])
-                                   (compile expr new-bindings)) exprs))
+              (compile expr new-bindings)) exprs))
      (define compiled-body  (compile-body bound-body new-bindings))
      (lambda ([env : ENV])
        (compiled-body (extend-rec compiled-exprs env)))]
@@ -416,13 +417,14 @@
 (test (run "{if {< 5 4} 6 7}")  => 7)
 (test (run "{if + 6 7}")        => 6)
 (test (run "{fun {x} x}")       =error> "returned a bad value")
-(test (run "{set! + /}")        =error> "Trying") ;;compile-time
-(test (run "{{rfun {x} {+ x 1}} +}") =error> "compiler: mutating global value") ;;run-time
-(test (run "{{rfun {x} {+ x 1}} y}") =error> "compiler: mutating global value")
+(test (run "{set! * /}")        =error> "compile: Trying to mutating a global")
+(test (run "{{rfun {x} {* x 2}} *}") =error> "compiler: mutating global value") 
+(test (run "{{rfun {x} {+ x 1}} y}") =error> "global-lookup: no binding for y")
 
 ;; assignment tests
 (test (run "{set! {+ x 1} x}")  =error> "bad `set!' syntax")
 (test (run "{bind {{x 1}} {set! x {+ x 1}} x}") => 2)
+(test (run "{bind {{- {set! + /}}} 1}") =error> "compile: Trying to mutating a global")
 
 ;; `bindrec' tests
 (test (run "{bindrec {x 6} x}") =error> "bad `bindrec' syntax")
@@ -490,5 +492,5 @@
               {fib 27}}"))
 ;; original TOY cpu time: 9564 real time: 8537 gc time: 1126
 ;; basic compiler cpu time: 4563 real time: 4611 gc time: 439
-;; This version cpu time: 3966 real time: 3978 gc time: 708
+;; This version cpu time: 2895 real time: 2919 gc time: 531
 |#
