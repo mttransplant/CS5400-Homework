@@ -449,13 +449,35 @@
                 {let* {{x 1} {y {+ x 1}}} {+ x y}}}}")
       => 3)
 
-#| uncomment these tests when you have working code
-
 ;; macros for I/O
 (test
  input: "Foo\nfoo@bar.com"
  (run-io
   "{with-stx {do {<-}
+                 {{do {id <- {read}} next more ...}
+                  {read {fun {id} {do next more ...}}}}
+                 {{do {print str} next more ...}
+                  {begin2 {print str}
+                          {do next more ...}}}
+                 {{do expr}
+                  expr}}
+     {do {print 'What is your name?\n'}
+         {name <- {read}}
+         {print 'What is your email?\n'}
+         {email <- {read}}
+         {print 'Your address is '''}
+         {print name}
+         {print ' <'}
+         {print email}
+         {print '>''\n'}}}")
+ =output> "What is your name?\n"
+ "What is your email?\n"
+ "Your address is 'Foo <foo@bar.com>'\n")
+
+#;(test
+   input: "Foo\nfoo@bar.com"
+   (run-io
+    "{with-stx {do {<-}
                  {{do {id <- {read}} next more ...}
                   ???}
                  {{do {print str} next more ...}
@@ -471,15 +493,16 @@
          {print ' <'}
          {print email}
          {print '>''\n'}}}")
- =output> "What is your name?\n"
-          "What is your email?\n"
-          "Your address is 'Foo <foo@bar.com>'\n")
+   =output> "What is your name?\n"
+   "What is your email?\n"
+   "Your address is 'Foo <foo@bar.com>'\n")
+
 
 ;; macros for I/O and refs (note how a `do' block is treated as just a
 ;; value, since it is one)
-(test
- (run-io
-  "{with-stx {do {<-}
+#;(test
+   (run-io
+    "{with-stx {do {<-}
                  ???}
      {bind {{incref   {fun {b}
                         {do {curval <- {unref b}}
@@ -493,7 +516,7 @@
            {print 'i holds: '}
            {thrice {do {incref i} {printref i ', '}}}
            {incref i} {printref i '.\n'}}}}")
- =output> "i holds: 1, 2, 3, 4.")
-|#
+   =output> "i holds: 1, 2, 3, 4.")
+
 
 ;;; ==================================================================
