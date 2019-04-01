@@ -327,7 +327,7 @@
 (: execute-read : VAL -> Void)
 ;; executes a `read' description
 (define (execute-read receiver)
-  (execute-receiver receiver (lambda () (let ([input (read-line)]) input))))
+  (execute-receiver receiver (lambda () (read-line))))
 
 (: execute-val : VAL -> Void)
 ;; extracts an IO from a VAL and executes it
