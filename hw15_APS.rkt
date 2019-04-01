@@ -301,14 +301,14 @@
   (let ([str (cases val [(RktV x) (and (string? x) x)] [else #f])])
     (if (string? str)
         (display str)
-        (error 'execute-print "cannot `print' a non-string value ~a" val))))
+        (error 'execute-print "cannot `print' a non-string value"))))
 
 (: execute-begin2 : VAL VAL -> Void)
 ;; executes a `begin2' description
 (define (execute-begin2 1st 2nd)
   ;(printf "not implemented\n")
-  (begin (execute-val 1st)
-         (execute-val 2nd)))
+  (execute-val 1st)
+  (execute-val 2nd))
 
 (: execute-receiver : VAL (-> Any) -> Void)
 ;; helper for executing receivers, wraps the value in a RktV if needed,
@@ -320,14 +320,14 @@
   (cases receiver
     [(FunV names body env)
      (execute-val (eval body (extend names
-                                     (list (wrap-in-val producer))
+                                     (list (wrap-in-val (producer)))
                                      env)))]
     [else (error 'execute-receiver "expecting a receiver function")]))
 
 (: execute-read : VAL -> Void)
 ;; executes a `read' description
 (define (execute-read receiver)
-  (execute-receiver receiver (lambda () (read-line))))
+  (execute-receiver receiver read-line))
 
 (: execute-val : VAL -> Void)
 ;; extracts an IO from a VAL and executes it
