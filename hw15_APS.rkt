@@ -131,7 +131,11 @@
 (define-type IO
   [Print    VAL]      ; String
   [ReadLine VAL]      ; receiver: String -> IO
-  [Begin2   VAL VAL]) ; IO IO
+  [Begin2   VAL VAL]  ; IO IO
+  ;; mutation
+  [NewRef   VAL VAL]  ; init, receiver for new ref
+  [UnRef    VAL VAL]  ; ref, receiver for its value
+  [SetRef   VAL VAL]) ; ref, new value
 
 (: extend : (Listof Symbol) (Listof VAL) ENV -> ENV)
 ;; extends an environment with a new frame.
@@ -204,9 +208,12 @@
                   (list 'rest  (racket-func->prim-val rest  #t))
                   (list 'null? (racket-func->prim-val null? #t))
                   ;; IO constructors -- all are non-strict
-                  (list 'print  (racket-func->prim-val Print    #f))
-                  (list 'read   (racket-func->prim-val ReadLine #f))
-                  (list 'begin2 (racket-func->prim-val Begin2   #f))
+                  (list 'print    (racket-func->prim-val Print    #f))
+                  (list 'read     (racket-func->prim-val ReadLine #f))
+                  (list 'begin2   (racket-func->prim-val Begin2   #f))
+                  (list 'newref   (racket-func->prim-val NewRef   #f))
+                  (list 'unref    (racket-func->prim-val UnRef    #f))
+                  (list 'set-ref! (racket-func->prim-val SetRef   #f))
                   ;; values
                   (list 'true  (RktV #t))
                   (list 'false (RktV #f))
@@ -322,12 +329,35 @@
      (execute-val (eval body (extend names
                                      (list (wrap-in-val (producer)))
                                      env)))]
-    [else (error 'execute-receiver "expecting a receiver function")]))
+    [else (error 'execute-receiver
+                 "expecting a receiver function ~a"
+                 receiver)]))
 
 (: execute-read : VAL -> Void)
 ;; executes a `read' description
 (define (execute-read receiver)
   (execute-receiver receiver read-line))
+
+(: execute-newref : Any VAL -> Void)
+;; executes a `newref' description
+(define (execute-newref val receiver)
+  (execute-receiver (strict receiver) (lambda () (ref val))))
+
+(: execute-unref : VAL VAL -> Void)
+;; executes an `unref' description
+(define (execute-unref r receiver)
+  (let ([sr (unwrap-rktv (strict r))])
+    (if (ref? sr)
+        (execute-receiver (strict receiver) (lambda () (unref sr)))
+        (error 'execute-unref "exepcting a ref, got ~s" sr))))
+
+(: execute-set-ref : VAL Any -> Void)
+;; executes an `execute-set-ref' description
+(define (execute-set-ref r val)
+  (let ([sr (unwrap-rktv (strict r))])
+    (if (ref? sr)
+        (set-ref! sr val)
+        (error 'execute-set-ref "expecting a ref, got ~s" sr))))
 
 (: execute-val : VAL -> Void)
 ;; extracts an IO from a VAL and executes it
@@ -341,7 +371,10 @@
         (cases io
           [(Print x)    (execute-print (strict x))]
           [(ReadLine x) (execute-read (strict x))]
-          [(Begin2 x y) (execute-begin2 x y)]))))
+          [(Begin2 x y) (execute-begin2 x y)]
+          [(NewRef x y) (execute-newref x y)]
+          [(UnRef x y) (execute-unref x y)]
+          [(SetRef x y) (execute-set-ref x y)]))))
 
 (: run-io : String -> Void)
 ;; evaluate a SLUG program contained in a string, and execute the
@@ -474,29 +507,29 @@
  "What is your email?\n"
  "Your address is 'Foo <foo@bar.com>'\n")
 
-#;(test
-   input: "Foo\nfoo@bar.com"
-   (run-io
-    "{with-stx {do {<-}
-                 {{do {id <- {read}} next more ...}
-                  ???}
-                 {{do {print str} next more ...}
-                  ???}
-                 {{do expr}
-                  ???}}
-     {do {print 'What is your name?\n'}
-         {name <- {read}}
-         {print 'What is your email?\n'}
-         {email <- {read}}
-         {print 'Your address is '''}
-         {print name}
-         {print ' <'}
-         {print email}
-         {print '>''\n'}}}")
-   =output> "What is your name?\n"
-   "What is your email?\n"
-   "Your address is 'Foo <foo@bar.com>'\n")
+(test (run-io "{unref {+ 1 2} {fun {x} x}}")
+      =error> "execute-unref: exepcting a ref, got 3")
 
+(test (run-io "{set-ref! {+ 1 2} {fun {x} x}}")
+      =error> "execute-set-ref: expecting a ref, got 3")
+
+;; Mutation in a Lazy Language
+(test (run-io
+       "{bind {{incref {fun {b}
+                   {unref b
+                     {fun {curval}
+                       {set-ref! b {+ 1 curval}}}}}}}
+    {newref 0
+      {fun {i}
+        {begin2
+          {incref i}
+          {begin2
+            {print 'i now holds: '}
+            {unref i
+              {fun {v}
+                {begin2 {print {number->string v}}
+                        {print '\n'}}}}}}}}}")
+      =output> "i now holds: 1")
 
 ;; macros for I/O and refs (note how a `do' block is treated as just a
 ;; value, since it is one)
