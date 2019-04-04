@@ -531,12 +531,40 @@
                         {print '\n'}}}}}}}}}")
       =output> "i now holds: 1")
 
+;; More Macros
+(test
+ (run-io
+  "{with-stx {do {<-}
+                 {{do {id <- {f x ...}} next more ...}
+                  {f x ... {fun {id} {do next more ...}}}}
+                 {{do expr next more ...}
+                  {begin2 expr
+                          {do next more ...}}}
+                 {{do expr}
+                  expr}}
+    {bind {{incref {fun {b}
+                     {do {curval <- {unref b}}
+                         {set-ref! b {+ 1 curval}}}}}}
+      {do {i <- {newref 0}}
+          {incref i}
+          {print 'i now holds: '}
+          {v <- {unref i}}
+          {print {number->string v}}
+          {print '\n'}}}}")
+ =output> "i now holds: 1")
+
 ;; macros for I/O and refs (note how a `do' block is treated as just a
 ;; value, since it is one)
-#;(test
-   (run-io
-    "{with-stx {do {<-}
-                 ???}
+(test
+ (run-io
+  "{with-stx {do {<-}
+                 {{do {id <- {f x ...}} next more ...}
+                  {f x ... {fun {id} {do next more ...}}}}
+                 {{do expr next more ...}
+                  {begin2 expr
+                          {do next more ...}}}
+                 {{do expr}
+                  expr}}
      {bind {{incref   {fun {b}
                         {do {curval <- {unref b}}
                             {set-ref! b {+ 1 curval}}}}}
@@ -549,7 +577,8 @@
            {print 'i holds: '}
            {thrice {do {incref i} {printref i ', '}}}
            {incref i} {printref i '.\n'}}}}")
-   =output> "i holds: 1, 2, 3, 4.")
+ =output> "i holds: 1, 2, 3, 4.")
 
 
 ;;; ==================================================================
+(define minutes-spent 660)
