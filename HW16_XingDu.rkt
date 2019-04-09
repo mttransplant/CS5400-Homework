@@ -1,11 +1,22 @@
 #lang pl 16
 #|
 Question 1: Why is macro expansion mixed with parsing?
-If the macro expansion was not mixed with parsing, the parser itself 
-   will fail when parsing a macro unless the macro is expanded in a 
-   pre-processer (like C compiler does). Using pre-processor will 
-   require going through the whole program again which will make it 
-   slow and increase code complexity.
+
+Both parsing and macro expansion happen at the syntax level
+during compile time, the result after this transformation is still
+at syntax level and will sometimes contain other macros, which need to
+be parsed after expansions.
+ 
+Mixing macro expansion with parsing could also
+enable recursive macro expansion.
+
+If the macro expansion was not mixed with parsing, the parser 
+will fail when parsing a macro.
+
+Using pre-processor will fix this but requires going through
+the whole program again which will make it 
+slow and increase code complexity.
+
 |#
 ;;; ==================================================================
 ;;; Syntax
