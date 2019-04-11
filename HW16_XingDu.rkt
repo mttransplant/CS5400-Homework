@@ -5,17 +5,8 @@ Question 1: Why is macro expansion mixed with parsing?
 Both parsing and macro expansion happen at the syntax level
 during compile time, the result after this transformation is still
 at syntax level and will sometimes contain other macros, which need to
-be parsed after expansions.
- 
-Mixing macro expansion with parsing could also
-enable recursive macro expansion.
-
-If the macro expansion was not mixed with parsing, the parser 
-will fail when parsing a macro.
-
-Using pre-processor will fix this but requires going through
-the whole program again which will make it 
-slow and increase code complexity.
+be parsed after expansions. Mixing macro expansion with parsing could
+also enable recursive macro expansion.
 
 |#
 ;;; ==================================================================
@@ -59,7 +50,7 @@ slow and increase code complexity.
 ;; function (transforms an s-expression into an s-expression)
 
 (: parse-sexpr : Sexpr (Listof (List Symbol (Sexpr -> Sexpr)))
-                 -> SLUG)
+   -> SLUG)
 ;; parses *and* macro-expands s-expressions; the second argument is
 ;; the association list of transformers at this point.
 (define (parse-sexpr sexpr transformers)
@@ -70,61 +61,61 @@ slow and increase code complexity.
   (let ([transformer (and (pair? sexpr)
                           (assq (car sexpr) transformers))])
     (if transformer
-      ;; if there is a transformer by this name, apply it and
-      ;; continue with the result
-      (parse* ((second transformer) sexpr))
-      (match sexpr
-        ;; if we see `with-stx', then recursively parse with the
-        ;; additional transformer that we make
-        [(cons 'with-stx more)
-         (match sexpr
-           [(list 'with-stx
-                  (list (symbol: name)
-                        (list (symbol: keywords) ...)
-                        (list (sexpr: pattern) (sexpr: result)) ...)
-                  body)
-            (parse-sexpr
-             body
-             (cons (list name (make-transformer
-                               keywords
-                               (map (lambda ([p : Sexpr] [r : Sexpr])
-                                      (list p r))
-                                    pattern result)))
-                   transformers))]
-           [else (error 'parse-sexpr "bad `with-stx' syntax in ~s"
-                        sexpr)])]
-        [(number: n)    (Num n)]
-        [(symbol: name) (Id name)]
-        [(string: s)    (Str s)]
-        [(cons 'bind more)
-         (match sexpr
-           [(list 'bind (list (list (symbol: names) (sexpr: nameds))
-                              ...)
-              body)
-            (if (unique-list? names)
-              (Bind names (map parse* nameds) (parse* body))
-              (error 'parse-sexpr "duplicate `bind' names: ~s" names))]
-           [else (error 'parse-sexpr "bad `bind' syntax in ~s" sexpr)])]
-        [(cons 'fun more)
-         (match sexpr
-           [(list 'fun (list (symbol: names) ...) body)
-            (if (unique-list? names)
-              (Fun names (parse* body))
-              (error 'parse-sexpr "duplicate `fun' names: ~s" names))]
-           [else (error 'parse-sexpr "bad `fun' syntax in ~s" sexpr)])]
-        [(cons 'if more)
-         (match sexpr
-           [(list 'if cond then else)
-            (If (parse* cond) (parse* then) (parse* else))]
-           [else (error 'parse-sexpr "bad `if' syntax in ~s" sexpr)])]
-        [(list fun args ...) ; other lists are applications
-         (Call (parse* fun) (map parse* args))]
-        [else (error 'parse-sexpr "bad syntax in ~s" sexpr)]))))
+        ;; if there is a transformer by this name, apply it and
+        ;; continue with the result
+        (parse* ((second transformer) sexpr))
+        (match sexpr
+          ;; if we see `with-stx', then recursively parse with the
+          ;; additional transformer that we make
+          [(cons 'with-stx more)
+           (match sexpr
+             [(list 'with-stx
+                    (list (symbol: name)
+                          (list (symbol: keywords) ...)
+                          (list (sexpr: pattern) (sexpr: result)) ...)
+                    body)
+              (parse-sexpr
+               body
+               (cons (list name (make-transformer
+                                 keywords
+                                 (map (lambda ([p : Sexpr] [r : Sexpr])
+                                        (list p r))
+                                      pattern result)))
+                     transformers))]
+             [else (error 'parse-sexpr "bad `with-stx' syntax in ~s"
+                          sexpr)])]
+          [(number: n)    (Num n)]
+          [(symbol: name) (Id name)]
+          [(string: s)    (Str s)]
+          [(cons 'bind more)
+           (match sexpr
+             [(list 'bind (list (list (symbol: names) (sexpr: nameds))
+                                ...)
+                    body)
+              (if (unique-list? names)
+                  (Bind names (map parse* nameds) (parse* body))
+                  (error 'parse-sexpr "duplicate `bind' names: ~s" names))]
+             [else (error 'parse-sexpr "bad `bind' syntax in ~s" sexpr)])]
+          [(cons 'fun more)
+           (match sexpr
+             [(list 'fun (list (symbol: names) ...) body)
+              (if (unique-list? names)
+                  (Fun names (parse* body))
+                  (error 'parse-sexpr "duplicate `fun' names: ~s" names))]
+             [else (error 'parse-sexpr "bad `fun' syntax in ~s" sexpr)])]
+          [(cons 'if more)
+           (match sexpr
+             [(list 'if cond then else)
+              (If (parse* cond) (parse* then) (parse* else))]
+             [else (error 'parse-sexpr "bad `if' syntax in ~s" sexpr)])]
+          [(list fun args ...) ; other lists are applications
+           (Call (parse* fun) (map parse* args))]
+          [else (error 'parse-sexpr "bad syntax in ~s" sexpr)]))))
 
 (: parse : String -> SLUG)
 ;; Parses a string containing an SLUG expression to a SLUG AST.
 (define (parse str)
-  (parse-sexpr (string->sexpr str) null))
+  (parse-sexpr (string->sexpr str) global-transformers))
 
 ;;; ==================================================================
 ;;; Values and environments
@@ -159,11 +150,11 @@ slow and increase code complexity.
 ;; extends an environment with a new frame.
 (define (extend names values env)
   (if (= (length names) (length values))
-    (FrameEnv (map (lambda ([name : Symbol] [val : VAL])
-                     (list name val))
-                   names values)
-              env)
-    (error 'extend "arity mismatch for names: ~s" names)))
+      (FrameEnv (map (lambda ([name : Symbol] [val : VAL])
+                       (list name val))
+                     names values)
+                env)
+      (error 'extend "arity mismatch for names: ~s" names)))
 
 (: lookup : Symbol ENV -> VAL)
 ;; looks for a name in an environment, searching through each frame.
@@ -173,8 +164,8 @@ slow and increase code complexity.
     [(FrameEnv frame rest)
      (let ([cell (assq name frame)])
        (if cell
-         (second cell)
-         (lookup name rest)))]))
+           (second cell)
+           (lookup name rest)))]))
 
 (: unwrap-rktv : VAL -> Any)
 ;; helper for `racket-func->prim-val': strict and unwrap a RktV
@@ -239,6 +230,46 @@ slow and increase code complexity.
                   (list 'null  (RktV null)))
             (EmptyEnv)))
 
+(: global-transformers : (Listof (List Symbol (Sexpr -> Sexpr))))
+;; global-transformers give some pre-defined syntaxes.
+(define global-transformers
+  (list
+   (list 'do
+         (make-transformer
+          (list '<-)
+          (map (lambda ([p : Sexpr] [r : Sexpr])
+                 (list p r))
+               (list (string->sexpr
+                      "{do {id <- {f x ...}} next more ...}")
+                     (string->sexpr
+                      "{do expr next more ...}")
+                     (string->sexpr
+                      "{do expr}"))
+               (list (string->sexpr
+                      "{f x ... {fun {id} {do next more ...}}}")
+                     (string->sexpr
+                      "{begin2 expr {do next more ...}}")
+                     (string->sexpr
+                      "expr")))))
+   (list 'prog
+         (make-transformer
+          (list ':=)
+          (map (lambda ([p : Sexpr] [r : Sexpr])
+                 (list p r))
+               (list (string->sexpr
+                      "{prog {namef id} := namedf more ...}")
+                     (string->sexpr
+                      "{prog name := named more ...}")
+                     (string->sexpr
+                      "{prog expr}"))
+               (list (string->sexpr
+                      "{bind {{namef {fun {id} namedf}}}
+                                {prog more ...}}")
+                     (string->sexpr
+                      "{bind {{name named}}
+                                {prog more ...}}")
+                     (string->sexpr
+                      "expr")))))))
 ;;; ==================================================================
 ;;; Evaluation
 
@@ -286,8 +317,8 @@ slow and increase code complexity.
      (eval* (if (cases (strict (eval* cond-expr))
                   [(RktV v) v] ; Racket value => use as boolean
                   [else #t])   ; other values are always true
-              then-expr
-              else-expr))]))
+                then-expr
+                else-expr))]))
 
 (: run : String -> Any)
 ;; evaluate a SLUG program contained in a string
@@ -326,8 +357,8 @@ slow and increase code complexity.
 (define (execute-print val)
   (let ([str (cases val [(RktV x) (and (string? x) x)] [else #f])])
     (if str
-      (display str)
-      (error 'print "cannot `print' a non-string value: ~s" val))))
+        (display str)
+        (error 'print "cannot `print' a non-string value: ~s" val))))
 
 (: execute-begin2 : VAL VAL -> Void)
 ;; executes a `begin2' description
@@ -363,16 +394,16 @@ slow and increase code complexity.
 (define (execute-unref val receiver)
   (let ([r (cases val [(RktV x) (and (ref? x) x)] [else #f])])
     (if r
-      (execute-receiver receiver (lambda () (unref r)))
-      (error 'unref "cannot `unref' a non-ref value: ~s" val))))
+        (execute-receiver receiver (lambda () (unref r)))
+        (error 'unref "cannot `unref' a non-ref value: ~s" val))))
 
 (: execute-setref : VAL VAL -> Void)
 ;; executes a `setref' description
 (define (execute-setref val newval)
   (let ([r (cases val [(RktV x) (and (ref? x) x)] [else #f])])
     (if r
-      (set-ref! r newval)
-      (error 'setref "cannot `set-ref!' a non-ref value: ~s" val))))
+        (set-ref! r newval)
+        (error 'setref "cannot `set-ref!' a non-ref value: ~s" val))))
 
 (: execute-val : VAL -> Void)
 ;; extracts an IO from a VAL and executes it
@@ -382,14 +413,14 @@ slow and increase code complexity.
                 [(RktV x) (and (IO? x) x)]
                 [else #f])])
     (if (not io)
-      (error 'execute-val "expecting an IO value: ~s" val)
-      (cases io
-        [(Print x)    (execute-print (strict x))]
-        [(ReadLine x) (execute-read (strict x))]
-        [(Begin2 x y) (execute-begin2 x y)]
-        [(NewRef x y) (execute-newref x (strict y))]
-        [(UnRef  x y) (execute-unref (strict x) (strict y))]
-        [(SetRef x y) (execute-setref (strict x) y)]))))
+        (error 'execute-val "expecting an IO value: ~s" val)
+        (cases io
+          [(Print x)    (execute-print (strict x))]
+          [(ReadLine x) (execute-read (strict x))]
+          [(Begin2 x y) (execute-begin2 x y)]
+          [(NewRef x y) (execute-newref x (strict y))]
+          [(UnRef  x y) (execute-unref (strict x) (strict y))]
+          [(SetRef x y) (execute-setref (strict x) y)]))))
 
 (: run-io : String -> Void)
 ;; evaluate a SLUG program contained in a string, and execute the
@@ -482,7 +513,7 @@ slow and increase code complexity.
                            {begin2 {print name}
                                    {print '''\n'}}}}}}")
  =output> "What is your name?"
-          "Your name is 'foo'\n")
+ "Your name is 'foo'\n")
 
 ;; test two macros
 (test (run "{with-stx {let {}
@@ -518,8 +549,8 @@ slow and increase code complexity.
          {print email}
          {print '>''\n'}}}")
  =output> "What is your name?\n"
-          "What is your email?\n"
-          "Your address is 'Foo <foo@bar.com>'\n")
+ "What is your email?\n"
+ "Your address is 'Foo <foo@bar.com>'\n")
 
 ;; macros for I/O and refs (note how a `do' block is treated as just a
 ;; value, since it is one)
@@ -557,3 +588,25 @@ slow and increase code complexity.
       =error> "cannot `set-ref!' a non-ref value")
 
 ;;; ==================================================================
+(test (run "{prog x := 1
+      y := 2
+      {foo n} := {+ n x}
+      x := {+ x 1}
+  {* x {foo y}}}") => 6)
+
+(test (run-io "{prog
+  {twice b} := {do {curval <- {unref b}}
+                 {set-ref! b {* 2 curval}}}
+  {do {i <- {newref 1}}
+      {twice i}
+      {print 'i now holds: '}
+      {v <- {unref i}}
+      {print {number->string v}}
+      {twice i}
+      {print ', and now it holds: '}
+      {v <- {unref i}}
+      {print {number->string v}}
+      {print '\n'}}}")
+      =output> "i now holds: 2, and now it holds: 4")
+
+(define minutes-spent 180)
