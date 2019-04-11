@@ -257,17 +257,17 @@ also enable recursive macro expansion.
           (map (lambda ([p : Sexpr] [r : Sexpr])
                  (list p r))
                (list (string->sexpr
-                      "{prog {namef id} := namedf more ...}")
+                      "{prog {id v} := func more ... body}")
                      (string->sexpr
-                      "{prog name := named more ...}")
+                      "{prog id := v more ... body}")
                      (string->sexpr
                       "{prog expr}"))
                (list (string->sexpr
-                      "{bind {{namef {fun {id} namedf}}}
-                                {prog more ...}}")
+                      "{bind {{id {fun {v} func}}}
+                                {prog more ... body}}")
                      (string->sexpr
-                      "{bind {{name named}}
-                                {prog more ...}}")
+                      "{bind {{id v}}
+                                {prog more ... body}}")
                      (string->sexpr
                       "expr")))))))
 ;;; ==================================================================
@@ -575,6 +575,23 @@ also enable recursive macro expansion.
            {print 'i holds: '}
            {thrice {do {incref i} {printref i ', '}}}
            {incref i} {printref i '.\n'}}}}")
+ =output> "i holds: 1, 2, 3, 4.")
+
+;; same test as above but relying on global-transformers
+(test
+ (run-io
+  "{bind {{incref   {fun {b}
+                         {do {curval <- {unref b}}
+                             {set-ref! b {+ 1 curval}}}}}
+           {printref {fun {b sfx}
+                          {do {v <- {unref b}}
+                              {print {number->string v}}
+                              {print sfx}}}}
+           {thrice   {fun {code} {do code code code}}}}
+       {do {i <- {newref 0}}
+           {print 'i holds: '}
+           {thrice {do {incref i} {printref i ', '}}}
+           {incref i} {printref i '.\n'}}}")
  =output> "i holds: 1, 2, 3, 4.")
 
 ;; some more tests for complete coverage
