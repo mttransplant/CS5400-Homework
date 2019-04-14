@@ -1,9 +1,11 @@
 #lang pl 16
 #|
 Question 1: Why is macro expansion mixed with parsing?
-Both parsing and macro expansion happen during compile time, not runtime,
-they both translate one syntax into another, and macro expansion will sometimes
-require code to also be parsed.
+Both parsing and macro expansion happen at the syntax level
+during compile time, the result after this transformation is still
+at syntax level and will sometimes contain other macros, which need to
+be parsed after expansions. Mixing macro expansion with parsing could
+also enable recursive macro expansion.
 |#
 
 ;;; ==================================================================
@@ -605,4 +607,4 @@ require code to also be parsed.
 
 ;;; ==================================================================
 
-(define minutes-spent 120)
+(define minutes-spent 180)
