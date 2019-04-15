@@ -55,7 +55,11 @@
 (define-syntax pushdown
   (syntax-rules (: ->)
     [(pushdown init-state end-state
-               [state : ((input ...) (stack-top ...) -> new-state push-stack)
+               [state : ((input ...)
+                         (stack-top ...)
+                         ->
+                         new-state
+                         (push-stack ...))
                       ...]
                ...)
      (lambda (string)
@@ -66,7 +70,7 @@
            [(list '() '()) (equal? 'state 'end-state)]
            [(list (list-rest 'input ... more-input)
                   (list-rest 'stack-top ... more-stack))
-            (new-state more-input (append 'push-stack more-stack))]
+            (new-state more-input (list* 'push-stack ... more-stack))]
            ...
            [_ #f]))
        ...
